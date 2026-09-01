@@ -1,6 +1,82 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
+
+bool useDesktopLayout(BuildContext context) =>
+    Platform.isWindows && MediaQuery.sizeOf(context).width >= 800;
+
+class DesktopPageHeader extends StatelessWidget {
+  const DesktopPageHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.actions = const [],
+  });
+
+  final String title;
+  final String subtitle;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 88,
+    padding: const EdgeInsets.symmetric(horizontal: 30),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(bottom: BorderSide(color: Color(0x14708078))),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 3),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        for (var index = 0; index < actions.length; index++) ...[
+          if (index > 0) const SizedBox(width: 10),
+          actions[index],
+        ],
+      ],
+    ),
+  );
+}
+
+Future<T?> showAdaptiveEditor<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  double desktopWidth = 580,
+}) {
+  if (useDesktopLayout(context)) {
+    return showDialog<T>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: desktopWidth,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height - 64,
+          ),
+          child: builder(dialogContext),
+        ),
+      ),
+    );
+  }
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: builder,
+  );
+}
 
 class ContentFrame extends StatelessWidget {
   const ContentFrame({super.key, required this.child, this.maxWidth = 1080});

@@ -70,6 +70,9 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appControllerProvider).requireValue;
+    if (useDesktopLayout(context)) {
+      return _buildDesktop(context, ref, data);
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ContentFrame(
@@ -205,15 +208,254 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildDesktop(
+    BuildContext context,
+    WidgetRef ref,
+    AppState data,
+  ) => Scaffold(
+    body: Column(
+      children: [
+        const DesktopPageHeader(
+          title: '个人与设置',
+          subtitle: '管理基础消耗、训练日营养目标与本地数据',
+        ),
+        Expanded(
+          child: ContentFrame(
+            maxWidth: 1320,
+            child: Scrollbar(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 6,
+                        child: Column(
+                          children: [
+                            const SectionHeader(
+                              title: '个人与基础消耗',
+                              subtitle: '公式建议只在你主动采用时生效',
+                            ),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const _IconTile(
+                                          icon: Icons.person_rounded,
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '${data.profile.sex == Sex.male ? '男' : '女'} · ${data.profile.age} 岁 · ${_trim(data.profile.heightCm)} cm · ${_trim(data.profile.weightKg)} kg',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '当前基础消耗 ${data.profile.baselineKcal} kcal/天',
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        OutlinedButton.icon(
+                                          onPressed: () => _editProfile(
+                                            context,
+                                            ref,
+                                            data.profile,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 18,
+                                          ),
+                                          label: const Text('编辑资料'),
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 30),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.auto_awesome_rounded,
+                                          color: brandGreen,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 9),
+                                        Expanded(
+                                          child: Text(
+                                            'Mifflin-St Jeor 公式建议：${data.profile.suggestedBaselineKcal} kcal/天',
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed:
+                                              data.profile.baselineKcal ==
+                                                  data
+                                                      .profile
+                                                      .suggestedBaselineKcal
+                                              ? null
+                                              : () => ref
+                                                    .read(
+                                                      appControllerProvider
+                                                          .notifier,
+                                                    )
+                                                    .saveProfile(
+                                                      data.profile.copyWith(
+                                                        baselineKcal: data
+                                                            .profile
+                                                            .suggestedBaselineKcal,
+                                                      ),
+                                                    ),
+                                          child: const Text('采用建议'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            const SectionHeader(
+                              title: '日类型与营养目标',
+                              subtitle: '修改只影响未来新建的日期',
+                            ),
+                            Card(
+                              child: Column(
+                                children: [
+                                  for (final type in DayType.values)
+                                    _GoalTile(
+                                      goal: data.goals[type]!,
+                                      isDefault:
+                                          data.profile.defaultDayType == type,
+                                      onEdit: () => _editGoal(
+                                        context,
+                                        ref,
+                                        data.goals[type]!,
+                                      ),
+                                      onSetDefault: () => ref
+                                          .read(appControllerProvider.notifier)
+                                          .saveProfile(
+                                            data.profile.copyWith(
+                                              defaultDayType: type,
+                                            ),
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 22),
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          children: [
+                            const SectionHeader(
+                              title: '数据管理',
+                              subtitle: '备份包含个人资料、菜谱和全部历史',
+                            ),
+                            Card(
+                              child: Column(
+                                children: [
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 7,
+                                    ),
+                                    leading: const _IconTile(
+                                      icon: Icons.save_alt_rounded,
+                                    ),
+                                    title: const Text('导出完整备份'),
+                                    subtitle: const Text('保存为版本化 JSON 文件'),
+                                    trailing: const Icon(
+                                      Icons.chevron_right_rounded,
+                                    ),
+                                    onTap: () => _export(context, ref),
+                                  ),
+                                  const Divider(indent: 72),
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 7,
+                                    ),
+                                    leading: const _IconTile(
+                                      icon: Icons.settings_backup_restore,
+                                    ),
+                                    title: const Text('从备份恢复'),
+                                    subtitle: const Text('校验后替换当前全部数据'),
+                                    trailing: const Icon(
+                                      Icons.chevron_right_rounded,
+                                    ),
+                                    onTap: () => _restore(context, ref),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            const SectionHeader(
+                              title: '计算与隐私',
+                              subtitle: '本地优先，不需要登录账户',
+                            ),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const _SettingNote(
+                                      icon: Icons.calculate_outlined,
+                                      title: '净能量计算',
+                                      message: '饮食摄入 − 当日基础消耗 − 运动消耗',
+                                    ),
+                                    const Divider(height: 28),
+                                    const _SettingNote(
+                                      icon: Icons.shield_outlined,
+                                      title: '本地数据',
+                                      message: '所有资料均保存在这台设备，不会自动上传',
+                                    ),
+                                    const Divider(height: 28),
+                                    _SettingNote(
+                                      icon: Icons.storage_outlined,
+                                      title: '当前版本',
+                                      message:
+                                          'CalorieRecord v1.0.1 · Windows x64',
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _editProfile(
     BuildContext context,
     WidgetRef ref,
     UserProfile profile,
   ) async {
-    await showModalBottomSheet<void>(
+    await showAdaptiveEditor<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (sheetContext) => Padding(
         padding: EdgeInsets.fromLTRB(
           20,
@@ -250,10 +492,8 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     DayGoal goal,
   ) async {
-    final saved = await showModalBottomSheet<DayGoal>(
+    final saved = await showAdaptiveEditor<DayGoal>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) => GoalEditor(goal: goal),
     );
     if (saved != null) {
@@ -584,6 +824,47 @@ class _GoalTile extends StatelessWidget {
   );
 }
 
+class _SettingNote extends StatelessWidget {
+  const _SettingNote({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.color = brandGreen,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 19),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(message, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
 class _IconTile extends StatelessWidget {
   const _IconTile({required this.icon});
 
@@ -605,17 +886,19 @@ class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Container(
-      width: 42,
-      height: 4,
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.black12,
-        borderRadius: BorderRadius.circular(99),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => useDesktopLayout(context)
+      ? const SizedBox(height: 6)
+      : Center(
+          child: Container(
+            width: 42,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        );
 }
 
 String _trim(double value) => value == value.roundToDouble()

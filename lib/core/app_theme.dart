@@ -108,6 +108,15 @@ ThemeData buildTheme() {
         textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
       ),
     ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 46),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        side: const BorderSide(color: Color(0x3322A06B)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -120,6 +129,15 @@ ThemeData buildTheme() {
       ),
       textStyle: const TextStyle(color: Colors.white),
     ),
-    visualDensity: VisualDensity.standard,
+    scrollbarTheme: ScrollbarThemeData(
+      thickness: WidgetStateProperty.all(7),
+      radius: const Radius.circular(99),
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.hovered)
+            ? const Color(0x6653655C)
+            : const Color(0x3353655C),
+      ),
+    ),
+    visualDensity: VisualDensity.adaptivePlatformDensity,
   );
 }

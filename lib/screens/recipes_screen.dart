@@ -18,6 +18,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final desktop = useDesktopLayout(context);
     final data = ref.watch(appControllerProvider).requireValue;
     final filtered = data.recipes
         .where(
@@ -25,108 +26,157 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
         )
         .toList();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的菜谱'),
-        actions: [
-          IconButton(
-            tooltip: '导入菜谱 JSON',
-            onPressed: () => _importRecipes(context),
-            icon: const Icon(Icons.file_download_outlined),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _editRecipe(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('新建菜谱'),
-      ),
-      body: ContentFrame(
-        maxWidth: 1180,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
-              child: TextField(
-                decoration: const InputDecoration(
-                  hintText: '搜索菜谱',
-                  prefixIcon: Icon(Icons.search_rounded),
+      appBar: desktop
+          ? null
+          : AppBar(
+              title: const Text('我的菜谱'),
+              actions: [
+                IconButton(
+                  tooltip: '导入菜谱 JSON',
+                  onPressed: () => _importRecipes(context),
+                  icon: const Icon(Icons.file_download_outlined),
                 ),
-                onChanged: (value) => setState(() => _query = value.trim()),
+                const SizedBox(width: 6),
+              ],
+            ),
+      floatingActionButton: desktop
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _editRecipe(context),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('新建菜谱'),
+            ),
+      body: Column(
+        children: [
+          if (desktop)
+            DesktopPageHeader(
+              title: '菜谱库',
+              subtitle: '共 ${data.recipes.length} 份菜谱 · 集中维护每份餐食的营养数据',
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: () => _importRecipes(context),
+                  icon: const Icon(Icons.file_download_outlined, size: 19),
+                  label: const Text('导入 JSON'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _editRecipe(context),
+                  icon: const Icon(Icons.add_rounded, size: 19),
+                  label: const Text('新建菜谱'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: ContentFrame(
+              maxWidth: 1240,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      desktop ? 28 : 18,
+                      desktop ? 24 : 4,
+                      desktop ? 28 : 18,
+                      14,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: desktop ? 460 : double.infinity,
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            hintText: '按名称搜索菜谱',
+                            prefixIcon: Icon(Icons.search_rounded),
+                          ),
+                          onChanged: (value) =>
+                              setState(() => _query = value.trim()),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? ListView(
+                            padding: EdgeInsets.all(desktop ? 28 : 18),
+                            children: [
+                              EmptyState(
+                                icon: Icons.menu_book_rounded,
+                                title: _query.isEmpty ? '还没有菜谱' : '没有找到菜谱',
+                                message: _query.isEmpty
+                                    ? '手动新建，或导入标准 JSON 文件'
+                                    : '换一个关键词试试',
+                                action: _query.isEmpty
+                                    ? FilledButton.tonalIcon(
+                                        onPressed: () => _editRecipe(context),
+                                        icon: const Icon(Icons.add_rounded),
+                                        label: const Text('新建第一份菜谱'),
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (desktop || constraints.maxWidth >= 800) {
+                                return GridView.builder(
+                                  padding: EdgeInsets.fromLTRB(
+                                    desktop ? 28 : 18,
+                                    0,
+                                    desktop ? 28 : 18,
+                                    desktop ? 36 : 110,
+                                  ),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                                        maxCrossAxisExtent: 520,
+                                        mainAxisExtent: 140,
+                                        crossAxisSpacing: 14,
+                                        mainAxisSpacing: 14,
+                                      ),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, index) => _RecipeCard(
+                                    recipe: filtered[index],
+                                    onEdit: () => _editRecipe(
+                                      context,
+                                      initial: filtered[index],
+                                    ),
+                                    onDelete: () =>
+                                        _deleteRecipe(context, filtered[index]),
+                                  ),
+                                );
+                              }
+                              return ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  0,
+                                  18,
+                                  110,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) => _RecipeCard(
+                                  recipe: filtered[index],
+                                  onEdit: () => _editRecipe(
+                                    context,
+                                    initial: filtered[index],
+                                  ),
+                                  onDelete: () =>
+                                      _deleteRecipe(context, filtered[index]),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              child: filtered.isEmpty
-                  ? ListView(
-                      padding: const EdgeInsets.all(18),
-                      children: [
-                        EmptyState(
-                          icon: Icons.menu_book_rounded,
-                          title: _query.isEmpty ? '还没有菜谱' : '没有找到菜谱',
-                          message: _query.isEmpty
-                              ? '手动新建，或导入标准 JSON 文件'
-                              : '换一个关键词试试',
-                          action: _query.isEmpty
-                              ? FilledButton.tonalIcon(
-                                  onPressed: () => _editRecipe(context),
-                                  icon: const Icon(Icons.add_rounded),
-                                  label: const Text('新建第一份菜谱'),
-                                )
-                              : null,
-                        ),
-                      ],
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth >= 800) {
-                          return GridView.builder(
-                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 550,
-                                  mainAxisExtent: 140,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                ),
-                            itemCount: filtered.length,
-                            itemBuilder: (context, index) => _RecipeCard(
-                              recipe: filtered[index],
-                              onEdit: () => _editRecipe(
-                                context,
-                                initial: filtered[index],
-                              ),
-                              onDelete: () =>
-                                  _deleteRecipe(context, filtered[index]),
-                            ),
-                          );
-                        }
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) => _RecipeCard(
-                            recipe: filtered[index],
-                            onEdit: () =>
-                                _editRecipe(context, initial: filtered[index]),
-                            onDelete: () =>
-                                _deleteRecipe(context, filtered[index]),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Future<void> _editRecipe(BuildContext context, {Recipe? initial}) async {
-    final recipe = await showModalBottomSheet<Recipe>(
+    final recipe = await showAdaptiveEditor<Recipe>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) => RecipeEditor(initial: initial),
     );
     if (recipe == null) return;
@@ -360,17 +410,18 @@ class _RecipeEditorState extends State<RecipeEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.black12,
-                  borderRadius: BorderRadius.circular(99),
+            if (!useDesktopLayout(context))
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
               ),
-            ),
             Text(
               widget.initial == null ? '新建菜谱' : '编辑菜谱',
               style: Theme.of(context).textTheme.headlineSmall,

@@ -15,6 +15,9 @@ class TodayScreen extends ConsumerWidget {
     final data = ref.watch(appControllerProvider).requireValue;
     final controller = ref.read(appControllerProvider.notifier);
     final summary = data.summary;
+    if (useDesktopLayout(context)) {
+      return _buildDesktop(context, ref, data);
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('能量收支'),
@@ -160,6 +163,208 @@ class TodayScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildDesktop(BuildContext context, WidgetRef ref, AppState data) {
+    final controller = ref.read(appControllerProvider.notifier);
+    final summary = data.summary;
+    final fullDate = DateFormat(
+      'yyyy年M月d日 EEEE',
+      'zh_CN',
+    ).format(data.selectedDate);
+    return Scaffold(
+      body: Column(
+        children: [
+          DesktopPageHeader(
+            title: '今日概览',
+            subtitle: '$fullDate · 集中查看今天的能量与营养状态',
+            actions: [
+              OutlinedButton.icon(
+                onPressed: () => _pickDate(context, ref, data.selectedDate),
+                icon: const Icon(Icons.calendar_month_outlined, size: 19),
+                label: const Text('选择日期'),
+              ),
+            ],
+          ),
+          Expanded(
+            child: ContentFrame(
+              maxWidth: 1420,
+              child: Scrollbar(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: _DateStrip(
+                                selected: data.selectedDate,
+                                onPrevious: () => controller.selectDate(
+                                  data.selectedDate.subtract(
+                                    const Duration(days: 1),
+                                  ),
+                                ),
+                                onNext: () => controller.selectDate(
+                                  data.selectedDate.add(
+                                    const Duration(days: 1),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Container(
+                              width: 1,
+                              height: 34,
+                              color: const Color(0x14708078),
+                            ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              flex: 6,
+                              child: SegmentedButton<DayType>(
+                                segments: DayType.values
+                                    .map(
+                                      (type) => ButtonSegment(
+                                        value: type,
+                                        label: Text(type.shortLabel),
+                                        icon: Icon(switch (type) {
+                                          DayType.cardio =>
+                                            Icons.directions_run_rounded,
+                                          DayType.strength =>
+                                            Icons.fitness_center_rounded,
+                                          DayType.rest =>
+                                            Icons.self_improvement_rounded,
+                                        }),
+                                      ),
+                                    )
+                                    .toList(),
+                                selected: {data.day.type},
+                                onSelectionChanged: (value) =>
+                                    controller.setDayType(value.first),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 5, child: _EnergyHero(summary: summary)),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          flex: 4,
+                          child: _DesktopNutritionPanel(summary: summary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _DesktopRecordsPanel(
+                            icon: Icons.restaurant_rounded,
+                            iconColor: const Color(0xFF9A6800),
+                            iconBackground: const Color(0xFFFFF3D6),
+                            title: '今日餐食',
+                            subtitle:
+                                '${data.meals.length} 条 · ${_kcal(data.intake.energyKcal)} kcal',
+                            actionLabel: '添加餐食',
+                            onAdd: () => _addMeal(context, ref, data),
+                            child: data.meals.isEmpty
+                                ? _DesktopPanelEmpty(
+                                    icon: Icons.ramen_dining_rounded,
+                                    message: data.recipes.isEmpty
+                                        ? '请先在菜谱库添加菜谱'
+                                        : '今天还没有餐食记录',
+                                  )
+                                : Column(
+                                    children: [
+                                      for (
+                                        var i = 0;
+                                        i < data.meals.length;
+                                        i++
+                                      ) ...[
+                                        _MealTile(
+                                          meal: data.meals[i],
+                                          onEdit: () => _editMeal(
+                                            context,
+                                            ref,
+                                            data.meals[i],
+                                          ),
+                                          onDelete: () => _deleteMeal(
+                                            context,
+                                            ref,
+                                            data.meals[i],
+                                          ),
+                                        ),
+                                        if (i != data.meals.length - 1)
+                                          const Divider(indent: 68),
+                                      ],
+                                    ],
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _DesktopRecordsPanel(
+                            icon: Icons.directions_run_rounded,
+                            iconColor: brandGreen,
+                            iconBackground: const Color(0xFFE7F5EE),
+                            title: '今日运动',
+                            subtitle:
+                                '${data.exercises.length} 条 · ${_kcal(data.exerciseKcal)} kcal',
+                            actionLabel: '添加运动',
+                            onAdd: () => _addExercise(context, ref, data),
+                            child: data.exercises.isEmpty
+                                ? const _DesktopPanelEmpty(
+                                    icon: Icons.directions_run_rounded,
+                                    message: '今天还没有运动记录',
+                                  )
+                                : Column(
+                                    children: [
+                                      for (
+                                        var i = 0;
+                                        i < data.exercises.length;
+                                        i++
+                                      ) ...[
+                                        _ExerciseTile(
+                                          exercise: data.exercises[i],
+                                          onEdit: () => _editExercise(
+                                            context,
+                                            ref,
+                                            data.exercises[i],
+                                          ),
+                                          onDelete: () => _deleteExercise(
+                                            context,
+                                            ref,
+                                            data.exercises[i],
+                                          ),
+                                        ),
+                                        if (i != data.exercises.length - 1)
+                                          const Divider(indent: 68),
+                                      ],
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickDate(
     BuildContext context,
     WidgetRef ref,
@@ -189,10 +394,8 @@ class TodayScreen extends ConsumerWidget {
           .showSnackBar(const SnackBar(content: Text('请先在“菜谱”页添加菜谱')));
       return;
     }
-    final meal = await showModalBottomSheet<MealEntry>(
+    final meal = await showAdaptiveEditor<MealEntry>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) =>
           MealEditor(date: data.selectedDate, recipes: data.recipes),
     );
@@ -206,10 +409,8 @@ class TodayScreen extends ConsumerWidget {
     WidgetRef ref,
     MealEntry meal,
   ) async {
-    final updated = await showModalBottomSheet<MealEntry>(
+    final updated = await showAdaptiveEditor<MealEntry>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) =>
           MealEditor(date: meal.date, recipes: const [], initial: meal),
     );
@@ -240,10 +441,8 @@ class TodayScreen extends ConsumerWidget {
     WidgetRef ref,
     AppState data,
   ) async {
-    final exercise = await showModalBottomSheet<ExerciseEntry>(
+    final exercise = await showAdaptiveEditor<ExerciseEntry>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) => ExerciseEditor(date: data.selectedDate),
     );
     if (exercise != null) {
@@ -256,10 +455,8 @@ class TodayScreen extends ConsumerWidget {
     WidgetRef ref,
     ExerciseEntry exercise,
   ) async {
-    final updated = await showModalBottomSheet<ExerciseEntry>(
+    final updated = await showAdaptiveEditor<ExerciseEntry>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       builder: (context) =>
           ExerciseEditor(date: exercise.date, initial: exercise),
     );
@@ -286,6 +483,229 @@ class TodayScreen extends ConsumerWidget {
           .deleteExercise(exercise.id!);
     }
   }
+}
+
+class _DesktopNutritionPanel extends StatelessWidget {
+  const _DesktopNutritionPanel({required this.summary});
+
+  final DailySummary summary;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 19),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('营养目标', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF5F0),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: const Text(
+                  '当日目标',
+                  style: TextStyle(
+                    color: deepGreen,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _DesktopNutrientRow(
+            label: '碳水',
+            actual: summary.intake.carbsG,
+            target: summary.record.target.carbsG,
+            color: const Color(0xFF3B82F6),
+          ),
+          const SizedBox(height: 16),
+          _DesktopNutrientRow(
+            label: '蛋白质',
+            actual: summary.intake.proteinG,
+            target: summary.record.target.proteinG,
+            color: const Color(0xFF8B5CF6),
+          ),
+          const SizedBox(height: 16),
+          _DesktopNutrientRow(
+            label: '脂肪',
+            actual: summary.intake.fatG,
+            target: summary.record.target.fatG,
+            color: const Color(0xFFF59E0B),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DesktopNutrientRow extends StatelessWidget {
+  const _DesktopNutrientRow({
+    required this.label,
+    required this.actual,
+    required this.target,
+    required this.color,
+  });
+
+  final String label;
+  final double actual;
+  final double target;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = target <= 0 ? 0.0 : (actual / target).clamp(0.0, 1.0);
+    final reached = target > 0 && actual >= target;
+    return Column(
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 58,
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 7,
+                  color: color,
+                  backgroundColor: color.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            SizedBox(
+              width: 92,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${_one(actual)}g',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    TextSpan(
+                      text: ' / ${_one(target)}g',
+                      style: const TextStyle(
+                        color: Color(0xFF7A857F),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              reached ? Icons.check_circle_rounded : Icons.timelapse_rounded,
+              color: reached ? brandGreen : const Color(0xFF9AA49F),
+              size: 18,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopRecordsPanel extends StatelessWidget {
+  const _DesktopRecordsPanel({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onAdd,
+    required this.child,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onAdd;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 14, 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: iconColor, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text(actionLabel),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
+        child,
+      ],
+    ),
+  );
+}
+
+class _DesktopPanelEmpty extends StatelessWidget {
+  const _DesktopPanelEmpty({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 126,
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: const Color(0xFFB3BDB8), size: 28),
+          const SizedBox(height: 8),
+          Text(message, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    ),
+  );
 }
 
 class _DateStrip extends StatelessWidget {
@@ -914,17 +1334,19 @@ class _ExerciseEditorState extends State<ExerciseEditor> {
 class _Handle extends StatelessWidget {
   const _Handle();
   @override
-  Widget build(BuildContext context) => Center(
-    child: Container(
-      width: 42,
-      height: 4,
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.black12,
-        borderRadius: BorderRadius.circular(99),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => useDesktopLayout(context)
+      ? const SizedBox(height: 6)
+      : Center(
+          child: Container(
+            width: 42,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        );
 }
 
 String _kcal(double value) => value.round().toString();

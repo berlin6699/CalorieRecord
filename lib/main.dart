@@ -14,8 +14,8 @@ Future<void> main() async {
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
     const options = WindowOptions(
-      size: Size(1180, 780),
-      minimumSize: Size(900, 640),
+      size: Size(1320, 840),
+      minimumSize: Size(1040, 700),
       center: true,
       backgroundColor: Color(0xFFF4F7F5),
       title: 'CalorieRecord · 能量收支',
