@@ -27,130 +27,134 @@ class TodayScreen extends ConsumerWidget {
           const SizedBox(width: 6),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => controller.reloadAll(selectedDate: data.selectedDate),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 2, 18, 34),
-          children: [
-            _DateStrip(
-              selected: data.selectedDate,
-              onPrevious: () => controller.selectDate(
-                data.selectedDate.subtract(const Duration(days: 1)),
-              ),
-              onNext: () => controller.selectDate(
-                data.selectedDate.add(const Duration(days: 1)),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<DayType>(
-                segments: DayType.values
-                    .map(
-                      (type) => ButtonSegment(
-                        value: type,
-                        label: Text(type.shortLabel),
-                        icon: Icon(switch (type) {
-                          DayType.cardio => Icons.directions_run_rounded,
-                          DayType.strength => Icons.fitness_center_rounded,
-                          DayType.rest => Icons.self_improvement_rounded,
-                        }),
-                      ),
-                    )
-                    .toList(),
-                selected: {data.day.type},
-                onSelectionChanged: (value) =>
-                    controller.setDayType(value.first),
-              ),
-            ),
-            const SizedBox(height: 18),
-            _EnergyHero(summary: summary),
-            const SizedBox(height: 18),
-            _NutritionGrid(summary: summary),
-            const SizedBox(height: 28),
-            SectionHeader(
-              title: '今日餐食',
-              subtitle:
-                  '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
-              trailing: IconButton.filledTonal(
-                tooltip: '添加餐食',
-                onPressed: () => _addMeal(context, ref, data),
-                icon: const Icon(Icons.add_rounded),
-              ),
-            ),
-            if (data.meals.isEmpty)
-              EmptyState(
-                icon: Icons.ramen_dining_rounded,
-                title: '还没有餐食记录',
-                message: data.recipes.isEmpty
-                    ? '请先到“菜谱”页添加或导入菜谱'
-                    : '从菜谱中选择一餐，输入实际份数',
-                action: data.recipes.isEmpty
-                    ? null
-                    : FilledButton.tonalIcon(
-                        onPressed: () => _addMeal(context, ref, data),
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('添加餐食'),
-                      ),
-              )
-            else
-              Card(
-                child: Column(
-                  children: [
-                    for (var i = 0; i < data.meals.length; i++) ...[
-                      _MealTile(
-                        meal: data.meals[i],
-                        onEdit: () => _editMeal(context, ref, data.meals[i]),
-                        onDelete: () =>
-                            _deleteMeal(context, ref, data.meals[i]),
-                      ),
-                      if (i != data.meals.length - 1)
-                        const Divider(height: 1, indent: 70),
-                    ],
-                  ],
+      body: ContentFrame(
+        maxWidth: 1040,
+        child: RefreshIndicator(
+          onRefresh: () =>
+              controller.reloadAll(selectedDate: data.selectedDate),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 2, 18, 34),
+            children: [
+              _DateStrip(
+                selected: data.selectedDate,
+                onPrevious: () => controller.selectDate(
+                  data.selectedDate.subtract(const Duration(days: 1)),
+                ),
+                onNext: () => controller.selectDate(
+                  data.selectedDate.add(const Duration(days: 1)),
                 ),
               ),
-            const SizedBox(height: 28),
-            SectionHeader(
-              title: '今日运动',
-              subtitle:
-                  '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
-              trailing: IconButton.filledTonal(
-                tooltip: '添加运动',
-                onPressed: () => _addExercise(context, ref, data),
-                icon: const Icon(Icons.add_rounded),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<DayType>(
+                  segments: DayType.values
+                      .map(
+                        (type) => ButtonSegment(
+                          value: type,
+                          label: Text(type.shortLabel),
+                          icon: Icon(switch (type) {
+                            DayType.cardio => Icons.directions_run_rounded,
+                            DayType.strength => Icons.fitness_center_rounded,
+                            DayType.rest => Icons.self_improvement_rounded,
+                          }),
+                        ),
+                      )
+                      .toList(),
+                  selected: {data.day.type},
+                  onSelectionChanged: (value) =>
+                      controller.setDayType(value.first),
+                ),
               ),
-            ),
-            if (data.exercises.isEmpty)
-              EmptyState(
-                icon: Icons.directions_run_rounded,
-                title: '还没有运动记录',
-                message: '记录运动项目和本次消耗的能量',
-                action: FilledButton.tonalIcon(
+              const SizedBox(height: 18),
+              _EnergyHero(summary: summary),
+              const SizedBox(height: 18),
+              _NutritionGrid(summary: summary),
+              const SizedBox(height: 28),
+              SectionHeader(
+                title: '今日餐食',
+                subtitle:
+                    '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
+                trailing: IconButton.filledTonal(
+                  tooltip: '添加餐食',
+                  onPressed: () => _addMeal(context, ref, data),
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ),
+              if (data.meals.isEmpty)
+                EmptyState(
+                  icon: Icons.ramen_dining_rounded,
+                  title: '还没有餐食记录',
+                  message: data.recipes.isEmpty
+                      ? '请先到“菜谱”页添加或导入菜谱'
+                      : '从菜谱中选择一餐，输入实际份数',
+                  action: data.recipes.isEmpty
+                      ? null
+                      : FilledButton.tonalIcon(
+                          onPressed: () => _addMeal(context, ref, data),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('添加餐食'),
+                        ),
+                )
+              else
+                Card(
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < data.meals.length; i++) ...[
+                        _MealTile(
+                          meal: data.meals[i],
+                          onEdit: () => _editMeal(context, ref, data.meals[i]),
+                          onDelete: () =>
+                              _deleteMeal(context, ref, data.meals[i]),
+                        ),
+                        if (i != data.meals.length - 1)
+                          const Divider(height: 1, indent: 70),
+                      ],
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 28),
+              SectionHeader(
+                title: '今日运动',
+                subtitle:
+                    '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
+                trailing: IconButton.filledTonal(
+                  tooltip: '添加运动',
                   onPressed: () => _addExercise(context, ref, data),
                   icon: const Icon(Icons.add_rounded),
-                  label: const Text('添加运动'),
-                ),
-              )
-            else
-              Card(
-                child: Column(
-                  children: [
-                    for (var i = 0; i < data.exercises.length; i++) ...[
-                      _ExerciseTile(
-                        exercise: data.exercises[i],
-                        onEdit: () =>
-                            _editExercise(context, ref, data.exercises[i]),
-                        onDelete: () =>
-                            _deleteExercise(context, ref, data.exercises[i]),
-                      ),
-                      if (i != data.exercises.length - 1)
-                        const Divider(height: 1, indent: 70),
-                    ],
-                  ],
                 ),
               ),
-          ],
+              if (data.exercises.isEmpty)
+                EmptyState(
+                  icon: Icons.directions_run_rounded,
+                  title: '还没有运动记录',
+                  message: '记录运动项目和本次消耗的能量',
+                  action: FilledButton.tonalIcon(
+                    onPressed: () => _addExercise(context, ref, data),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('添加运动'),
+                  ),
+                )
+              else
+                Card(
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < data.exercises.length; i++) ...[
+                        _ExerciseTile(
+                          exercise: data.exercises[i],
+                          onEdit: () =>
+                              _editExercise(context, ref, data.exercises[i]),
+                          onDelete: () =>
+                              _deleteExercise(context, ref, data.exercises[i]),
+                        ),
+                        if (i != data.exercises.length - 1)
+                          const Divider(height: 1, indent: 70),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

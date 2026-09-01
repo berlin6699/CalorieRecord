@@ -17,6 +17,36 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
 
+  static const _pages = [
+    TodayScreen(),
+    RecipesScreen(),
+    TrendsScreen(),
+    SettingsScreen(),
+  ];
+
+  static const _railDestinations = [
+    NavigationRailDestination(
+      icon: Icon(Icons.today_outlined),
+      selectedIcon: Icon(Icons.today_rounded),
+      label: Text('今日'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.restaurant_menu_outlined),
+      selectedIcon: Icon(Icons.restaurant_menu_rounded),
+      label: Text('菜谱'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.insights_outlined),
+      selectedIcon: Icon(Icons.insights_rounded),
+      label: Text('趋势'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.tune_outlined),
+      selectedIcon: Icon(Icons.tune_rounded),
+      label: Text('设置'),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final app = ref.watch(appControllerProvider);
@@ -55,42 +85,121 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
       data: (data) {
         if (!data.profile.configured) return const FirstRunSetupScreen();
-        const pages = [
-          TodayScreen(),
-          RecipesScreen(),
-          TrendsScreen(),
-          SettingsScreen(),
-        ];
-        return Scaffold(
-          body: IndexedStack(index: _index, children: pages),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (value) => setState(() => _index = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.today_outlined),
-                selectedIcon: Icon(Icons.today_rounded),
-                label: '今日',
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop = constraints.maxWidth >= 760;
+            if (!desktop) {
+              return Scaffold(
+                body: IndexedStack(index: _index, children: _pages),
+                bottomNavigationBar: NavigationBar(
+                  selectedIndex: _index,
+                  onDestinationSelected: _selectPage,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.today_outlined),
+                      selectedIcon: Icon(Icons.today_rounded),
+                      label: '今日',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.restaurant_menu_outlined),
+                      selectedIcon: Icon(Icons.restaurant_menu_rounded),
+                      label: '菜谱',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.insights_outlined),
+                      selectedIcon: Icon(Icons.insights_rounded),
+                      label: '趋势',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.tune_outlined),
+                      selectedIcon: Icon(Icons.tune_rounded),
+                      label: '设置',
+                    ),
+                  ],
+                ),
+              );
+            }
+            final extended = constraints.maxWidth >= 1120;
+            return Scaffold(
+              body: Row(
+                children: [
+                  SafeArea(
+                    right: false,
+                    child: NavigationRail(
+                      extended: extended,
+                      minExtendedWidth: 210,
+                      selectedIndex: _index,
+                      onDestinationSelected: _selectPage,
+                      groupAlignment: -0.55,
+                      leading: _AppBrand(extended: extended),
+                      destinations: _railDestinations,
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: IndexedStack(index: _index, children: _pages),
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.restaurant_menu_outlined),
-                selectedIcon: Icon(Icons.restaurant_menu_rounded),
-                label: '菜谱',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.insights_outlined),
-                selectedIcon: Icon(Icons.insights_rounded),
-                label: '趋势',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.tune_outlined),
-                selectedIcon: Icon(Icons.tune_rounded),
-                label: '设置',
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
+
+  void _selectPage(int value) => setState(() => _index = value);
+}
+
+class _AppBrand extends StatelessWidget {
+  const _AppBrand({required this.extended});
+
+  final bool extended;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(12, 14, extended ? 22 : 12, 34),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF147553), Color(0xFF2AB77C)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x3022A06B),
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
+        ),
+        if (extended) ...[
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CalorieRecord',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 1),
+              Text(
+                '能量与营养记录',
+                style: TextStyle(fontSize: 11, color: Color(0xFF718078)),
+              ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
 }

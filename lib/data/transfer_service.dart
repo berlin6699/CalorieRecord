@@ -17,13 +17,23 @@ class TransferService {
 
   Future<void> exportBackup() async {
     final data = await database.exportAll();
-    final directory = await getTemporaryDirectory();
     final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final file = File(p.join(directory.path, '能量收支备份_$stamp.json'));
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(data),
-      flush: true,
-    );
+    final fileName = 'CalorieRecord_备份_$stamp.json';
+    final payload = const JsonEncoder.withIndent('  ').convert(data);
+    if (Platform.isWindows || Platform.isLinux) {
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出 CalorieRecord 完整备份',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (outputPath == null) return;
+      await File(outputPath).writeAsString(payload, flush: true);
+      return;
+    }
+    final directory = await getTemporaryDirectory();
+    final file = File(p.join(directory.path, fileName));
+    await file.writeAsString(payload, flush: true);
     await SharePlus.instance.share(
       ShareParams(
         subject: '能量收支数据备份',

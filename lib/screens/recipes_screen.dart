@@ -41,54 +41,83 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('新建菜谱'),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: '搜索菜谱',
-                prefixIcon: Icon(Icons.search_rounded),
+      body: ContentFrame(
+        maxWidth: 1180,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: '搜索菜谱',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+                onChanged: (value) => setState(() => _query = value.trim()),
               ),
-              onChanged: (value) => setState(() => _query = value.trim()),
             ),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? ListView(
-                    padding: const EdgeInsets.all(18),
-                    children: [
-                      EmptyState(
-                        icon: Icons.menu_book_rounded,
-                        title: _query.isEmpty ? '还没有菜谱' : '没有找到菜谱',
-                        message: _query.isEmpty
-                            ? '手动新建，或导入 Codex 生成的标准 JSON 文件'
-                            : '换一个关键词试试',
-                        action: _query.isEmpty
-                            ? FilledButton.tonalIcon(
-                                onPressed: () => _editRecipe(context),
-                                icon: const Icon(Icons.add_rounded),
-                                label: const Text('新建第一份菜谱'),
-                              )
-                            : null,
-                      ),
-                    ],
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final recipe = filtered[index];
-                      return _RecipeCard(
-                        recipe: recipe,
-                        onEdit: () => _editRecipe(context, initial: recipe),
-                        onDelete: () => _deleteRecipe(context, recipe),
-                      );
-                    },
-                  ),
-          ),
-        ],
+            Expanded(
+              child: filtered.isEmpty
+                  ? ListView(
+                      padding: const EdgeInsets.all(18),
+                      children: [
+                        EmptyState(
+                          icon: Icons.menu_book_rounded,
+                          title: _query.isEmpty ? '还没有菜谱' : '没有找到菜谱',
+                          message: _query.isEmpty
+                              ? '手动新建，或导入标准 JSON 文件'
+                              : '换一个关键词试试',
+                          action: _query.isEmpty
+                              ? FilledButton.tonalIcon(
+                                  onPressed: () => _editRecipe(context),
+                                  icon: const Icon(Icons.add_rounded),
+                                  label: const Text('新建第一份菜谱'),
+                                )
+                              : null,
+                        ),
+                      ],
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth >= 800) {
+                          return GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 550,
+                                  mainAxisExtent: 140,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) => _RecipeCard(
+                              recipe: filtered[index],
+                              onEdit: () => _editRecipe(
+                                context,
+                                initial: filtered[index],
+                              ),
+                              onDelete: () =>
+                                  _deleteRecipe(context, filtered[index]),
+                            ),
+                          );
+                        }
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) => _RecipeCard(
+                            recipe: filtered[index],
+                            onEdit: () =>
+                                _editRecipe(context, initial: filtered[index]),
+                            onDelete: () =>
+                                _deleteRecipe(context, filtered[index]),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

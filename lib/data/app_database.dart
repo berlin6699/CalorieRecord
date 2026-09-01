@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'models.dart';
 
@@ -13,7 +15,14 @@ class AppDatabase {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    final path = p.join(await getDatabasesPath(), 'energy_balance.db');
+    if (Platform.isWindows || Platform.isLinux) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+    final root = Platform.isWindows || Platform.isLinux
+        ? (await getApplicationSupportDirectory()).path
+        : await getDatabasesPath();
+    final path = p.join(root, 'energy_balance.db');
     _database = await openDatabase(
       path,
       version: 1,

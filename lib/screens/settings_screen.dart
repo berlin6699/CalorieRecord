@@ -72,128 +72,135 @@ class SettingsScreen extends ConsumerWidget {
     final data = ref.watch(appControllerProvider).requireValue;
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 6, 18, 32),
-        children: [
-          const SectionHeader(title: '个人与基础消耗', subtitle: '公式建议只在你主动采用时生效'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
+      body: ContentFrame(
+        maxWidth: 980,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 6, 18, 32),
+          children: [
+            const SectionHeader(title: '个人与基础消耗', subtitle: '公式建议只在你主动采用时生效'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _IconTile(icon: Icons.person_rounded),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${data.profile.sex == Sex.male ? '男' : '女'} · ${data.profile.age} 岁 · ${_trim(data.profile.heightCm)} cm · ${_trim(data.profile.weightKg)} kg',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '当前基础消耗 ${data.profile.baselineKcal} kcal/天',
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '编辑个人资料',
+                          onPressed: () =>
+                              _editProfile(context, ref, data.profile),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 28),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: brandGreen,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '公式建议 ${data.profile.suggestedBaselineKcal} kcal/天',
+                          ),
+                        ),
+                        TextButton(
+                          onPressed:
+                              data.profile.baselineKcal ==
+                                  data.profile.suggestedBaselineKcal
+                              ? null
+                              : () => ref
+                                    .read(appControllerProvider.notifier)
+                                    .saveProfile(
+                                      data.profile.copyWith(
+                                        baselineKcal:
+                                            data.profile.suggestedBaselineKcal,
+                                      ),
+                                    ),
+                          child: const Text('采用'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 26),
+            const SectionHeader(title: '日类型与营养目标', subtitle: '修改只影响未来新建的日期'),
+            Card(
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      _IconTile(icon: Icons.person_rounded),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${data.profile.sex == Sex.male ? '男' : '女'} · ${data.profile.age} 岁 · ${_trim(data.profile.heightCm)} cm · ${_trim(data.profile.weightKg)} kg',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text('当前基础消耗 ${data.profile.baselineKcal} kcal/天'),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '编辑个人资料',
-                        onPressed: () =>
-                            _editProfile(context, ref, data.profile),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                    ],
+                  for (final type in DayType.values)
+                    _GoalTile(
+                      goal: data.goals[type]!,
+                      isDefault: data.profile.defaultDayType == type,
+                      onEdit: () => _editGoal(context, ref, data.goals[type]!),
+                      onSetDefault: () => ref
+                          .read(appControllerProvider.notifier)
+                          .saveProfile(
+                            data.profile.copyWith(defaultDayType: type),
+                          ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 26),
+            const SectionHeader(title: '数据管理', subtitle: '备份包含个人资料、菜谱和全部历史'),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const _IconTile(icon: Icons.ios_share_rounded),
+                    title: const Text('导出完整备份'),
+                    subtitle: const Text('保存或分享版本化 JSON 文件'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _export(context, ref),
                   ),
-                  const Divider(height: 28),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.auto_awesome_rounded,
-                        color: brandGreen,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '公式建议 ${data.profile.suggestedBaselineKcal} kcal/天',
-                        ),
-                      ),
-                      TextButton(
-                        onPressed:
-                            data.profile.baselineKcal ==
-                                data.profile.suggestedBaselineKcal
-                            ? null
-                            : () => ref
-                                  .read(appControllerProvider.notifier)
-                                  .saveProfile(
-                                    data.profile.copyWith(
-                                      baselineKcal:
-                                          data.profile.suggestedBaselineKcal,
-                                    ),
-                                  ),
-                        child: const Text('采用'),
-                      ),
-                    ],
+                  const Divider(indent: 72, height: 1),
+                  ListTile(
+                    leading: const _IconTile(
+                      icon: Icons.settings_backup_restore,
+                    ),
+                    title: const Text('从备份恢复'),
+                    subtitle: const Text('校验成功后替换当前全部数据'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _restore(context, ref),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 26),
-          const SectionHeader(title: '日类型与营养目标', subtitle: '修改只影响未来新建的日期'),
-          Card(
-            child: Column(
-              children: [
-                for (final type in DayType.values)
-                  _GoalTile(
-                    goal: data.goals[type]!,
-                    isDefault: data.profile.defaultDayType == type,
-                    onEdit: () => _editGoal(context, ref, data.goals[type]!),
-                    onSetDefault: () => ref
-                        .read(appControllerProvider.notifier)
-                        .saveProfile(
-                          data.profile.copyWith(defaultDayType: type),
-                        ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 26),
-          const SectionHeader(title: '数据管理', subtitle: '备份包含个人资料、菜谱和全部历史'),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const _IconTile(icon: Icons.ios_share_rounded),
-                  title: const Text('导出完整备份'),
-                  subtitle: const Text('保存或分享版本化 JSON 文件'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _export(context, ref),
+            const SizedBox(height: 26),
+            Card(
+              color: const Color(0xFFEAF5F0),
+              child: const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text(
+                  '计算说明\n净能量 = 饮食摄入 − 当日基础消耗 − 运动消耗。公式建议采用 Mifflin-St Jeor BMR × 1.2；修改身体数据后不会自动覆盖你正在使用的基础消耗。',
                 ),
-                const Divider(indent: 72, height: 1),
-                ListTile(
-                  leading: const _IconTile(icon: Icons.settings_backup_restore),
-                  title: const Text('从备份恢复'),
-                  subtitle: const Text('校验成功后替换当前全部数据'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _restore(context, ref),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 26),
-          Card(
-            color: const Color(0xFFEAF5F0),
-            child: const Padding(
-              padding: EdgeInsets.all(18),
-              child: Text(
-                '计算说明\n净能量 = 饮食摄入 − 当日基础消耗 − 运动消耗。公式建议采用 Mifflin-St Jeor BMR × 1.2；修改身体数据后不会自动覆盖你正在使用的基础消耗。',
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,18 @@
 # CalorieRecord（能量收支）
 
-一款离线运行的 Android 健身饮食与能量收支记录 App。数据只保存在设备本地，支持三类训练日目标、菜谱管理、餐食和运动记录、7/30/90 天趋势以及 JSON 备份恢复。热量按净增加/净缺口展示，三大营养素按每天保存的目标快照判断达标情况。
+一款离线运行的 Android / Windows 健身饮食与能量收支记录 App。两个版本功能一致，数据只保存在本机。
+
+## v1.0 功能
+
+- 今日净能量：摄入 − 基础消耗 − 运动消耗，清楚展示热量增加或热量缺口。
+- 营养目标：碳水、蛋白质和脂肪按当天保存的目标快照显示完成度。
+- 菜谱与记录：维护每份营养数据，快速添加每日餐食与运动消耗。
+- 历史趋势：查看 7 / 30 / 90 天实际数据与当天目标趋势线。
+- 三类日目标：有氧日、力量日和休息日可分别设置营养目标。
+- 本地优先：SQLite 离线存储，支持跨 Android / Windows 的 JSON 备份与恢复。
+- 响应式界面：手机使用底部导航，Windows 宽屏自动使用侧边导航和多列布局。
+
+预编译版本可从 [GitHub Releases](https://github.com/berlin6699/CalorieRecord/releases) 下载。
 
 ## 开发与构建
 
@@ -10,9 +22,11 @@ flutter analyze
 flutter test
 flutter run
 flutter build apk --release
+flutter run -d windows
+flutter build windows --release
 ```
 
-在 Windows 上调试 Android 版需要 Flutter SDK、Android Studio、Android SDK 和 Android Emulator。运行 `flutter doctor -v` 可检查环境。
+Android 版需要 Flutter SDK、JDK、Android SDK 和 Android Emulator；Windows 版还需要 Visual Studio Build Tools 的“使用 C++ 的桌面开发”工作负载。运行 `flutter doctor -v` 可检查环境。
 
 本机已在 `D:\toolchains` 准备好便携式 Flutter、JDK、Android SDK 和 `EnergyBalance_API36` 模拟器。直接运行：
 
@@ -21,6 +35,18 @@ flutter build apk --release
 ```
 
 脚本会启动可见的虚拟手机并进入 `flutter run`，可在终端按 `r` 热重载。重新检查并生成 APK 可运行 `.\scripts\build_apk.ps1`。
+
+启动 Windows 调试版：
+
+```powershell
+.\scripts\run_windows.ps1
+```
+
+同时生成 Android APK 与 Windows ZIP 发布包：
+
+```powershell
+.\scripts\build_release.ps1
+```
 
 ## 菜谱批量导入
 

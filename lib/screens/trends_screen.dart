@@ -52,129 +52,132 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
     final deficitDays = items.where((item) => item.netEnergy < 0).length;
     return Scaffold(
       appBar: AppBar(title: const Text('趋势')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 4, 18, 34),
-        children: [
-          Center(
-            child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 7, label: Text('7 天')),
-                ButtonSegment(value: 30, label: Text('30 天')),
-                ButtonSegment(value: 90, label: Text('90 天')),
-              ],
-              selected: {_days},
-              onSelectionChanged: (value) =>
-                  setState(() => _days = value.first),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryCard(
-                  label: '日均净能量',
-                  value: '${averageNet > 0 ? '+' : ''}${averageNet.round()}',
-                  unit: 'kcal',
-                  icon: averageNet <= 0
-                      ? Icons.south_east_rounded
-                      : Icons.north_east_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SummaryCard(
-                  label: '累计净收支',
-                  value: '${net > 0 ? '+' : ''}${net.round()}',
-                  unit: 'kcal',
-                  icon: net <= 0
-                      ? Icons.south_east_rounded
-                      : Icons.north_east_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SummaryCard(
-                  label: '热量缺口天数',
-                  value: '$deficitDays',
-                  unit: '天',
-                  icon: Icons.calendar_view_week_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          SectionHeader(
-            title: _metric.label,
-            subtitle: _metric == TrendMetric.net
-                ? '0 为平衡线，负数为缺口，正数为增加'
-                : _metric == TrendMetric.exercise
-                ? '共 ${items.length} 个有记录的日期'
-                : '实际摄入与每天保存的目标快照对比',
-            trailing: DropdownButtonHideUnderline(
-              child: DropdownButton<TrendMetric>(
-                value: _metric,
-                borderRadius: BorderRadius.circular(14),
-                items: TrendMetric.values
-                    .map(
-                      (metric) => DropdownMenuItem(
-                        value: metric,
-                        child: Text(metric.label),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => _metric = value ?? _metric),
-              ),
-            ),
-          ),
-          if (items.isEmpty)
-            const EmptyState(
-              icon: Icons.insights_rounded,
-              title: '还没有趋势数据',
-              message: '开始记录餐食或运动后，这里会展示变化趋势',
-            )
-          else
-            _TrendChart(items: items, metric: _metric),
-          const SizedBox(height: 26),
-          const SectionHeader(title: '营养达标概览', subtitle: '按所选周期内有记录的日期计算'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  _AttainmentRow(
-                    label: '碳水',
-                    color: const Color(0xFF3B82F6),
-                    value: _averageRatio(
-                      items,
-                      (x) => x.intake.carbsG,
-                      (x) => x.record.target.carbsG,
-                    ),
-                  ),
-                  _AttainmentRow(
-                    label: '蛋白质',
-                    color: const Color(0xFF8B5CF6),
-                    value: _averageRatio(
-                      items,
-                      (x) => x.intake.proteinG,
-                      (x) => x.record.target.proteinG,
-                    ),
-                  ),
-                  _AttainmentRow(
-                    label: '脂肪',
-                    color: const Color(0xFFF59E0B),
-                    value: _averageRatio(
-                      items,
-                      (x) => x.intake.fatG,
-                      (x) => x.record.target.fatG,
-                    ),
-                    isLast: true,
-                  ),
+      body: ContentFrame(
+        maxWidth: 1100,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 34),
+          children: [
+            Center(
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 7, label: Text('7 天')),
+                  ButtonSegment(value: 30, label: Text('30 天')),
+                  ButtonSegment(value: 90, label: Text('90 天')),
                 ],
+                selected: {_days},
+                onSelectionChanged: (value) =>
+                    setState(() => _days = value.first),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _SummaryCard(
+                    label: '日均净能量',
+                    value: '${averageNet > 0 ? '+' : ''}${averageNet.round()}',
+                    unit: 'kcal',
+                    icon: averageNet <= 0
+                        ? Icons.south_east_rounded
+                        : Icons.north_east_rounded,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SummaryCard(
+                    label: '累计净收支',
+                    value: '${net > 0 ? '+' : ''}${net.round()}',
+                    unit: 'kcal',
+                    icon: net <= 0
+                        ? Icons.south_east_rounded
+                        : Icons.north_east_rounded,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SummaryCard(
+                    label: '热量缺口天数',
+                    value: '$deficitDays',
+                    unit: '天',
+                    icon: Icons.calendar_view_week_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            SectionHeader(
+              title: _metric.label,
+              subtitle: _metric == TrendMetric.net
+                  ? '0 为平衡线，负数为缺口，正数为增加'
+                  : _metric == TrendMetric.exercise
+                  ? '共 ${items.length} 个有记录的日期'
+                  : '实际摄入与每天保存的目标快照对比',
+              trailing: DropdownButtonHideUnderline(
+                child: DropdownButton<TrendMetric>(
+                  value: _metric,
+                  borderRadius: BorderRadius.circular(14),
+                  items: TrendMetric.values
+                      .map(
+                        (metric) => DropdownMenuItem(
+                          value: metric,
+                          child: Text(metric.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _metric = value ?? _metric),
+                ),
+              ),
+            ),
+            if (items.isEmpty)
+              const EmptyState(
+                icon: Icons.insights_rounded,
+                title: '还没有趋势数据',
+                message: '开始记录餐食或运动后，这里会展示变化趋势',
+              )
+            else
+              _TrendChart(items: items, metric: _metric),
+            const SizedBox(height: 26),
+            const SectionHeader(title: '营养达标概览', subtitle: '按所选周期内有记录的日期计算'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    _AttainmentRow(
+                      label: '碳水',
+                      color: const Color(0xFF3B82F6),
+                      value: _averageRatio(
+                        items,
+                        (x) => x.intake.carbsG,
+                        (x) => x.record.target.carbsG,
+                      ),
+                    ),
+                    _AttainmentRow(
+                      label: '蛋白质',
+                      color: const Color(0xFF8B5CF6),
+                      value: _averageRatio(
+                        items,
+                        (x) => x.intake.proteinG,
+                        (x) => x.record.target.proteinG,
+                      ),
+                    ),
+                    _AttainmentRow(
+                      label: '脂肪',
+                      color: const Color(0xFFF59E0B),
+                      value: _averageRatio(
+                        items,
+                        (x) => x.intake.fatG,
+                        (x) => x.record.target.fatG,
+                      ),
+                      isLast: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 const brandGreen = Color(0xFF22A06B);
 const deepGreen = Color(0xFF116149);
-const canvasColor = Color(0xFFF5F7F6);
+const canvasColor = Color(0xFFF4F7F5);
 const inkColor = Color(0xFF17211C);
 
 ThemeData buildTheme() {
@@ -43,9 +43,32 @@ ThemeData buildTheme() {
     ),
     cardTheme: CardThemeData(
       color: Colors.white,
-      elevation: 0,
+      elevation: 0.5,
+      shadowColor: const Color(0x1A14392B),
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: Color(0x0D173D2D)),
+      ),
+    ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: Colors.white,
+      indicatorColor: const Color(0xFFDDF4E9),
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      selectedIconTheme: const IconThemeData(color: deepGreen),
+      selectedLabelTextStyle: const TextStyle(
+        color: deepGreen,
+        fontWeight: FontWeight.w700,
+      ),
+      unselectedIconTheme: const IconThemeData(color: Color(0xFF738079)),
+      unselectedLabelTextStyle: const TextStyle(color: Color(0xFF66736D)),
+    ),
+    dividerTheme: const DividerThemeData(
+      color: Color(0x14708078),
+      thickness: 1,
+      space: 1,
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 72,
@@ -89,5 +112,14 @@ ThemeData buildTheme() {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
+    tooltipTheme: TooltipThemeData(
+      waitDuration: const Duration(milliseconds: 450),
+      decoration: BoxDecoration(
+        color: inkColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white),
+    ),
+    visualDensity: VisualDensity.standard,
   );
 }

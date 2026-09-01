@@ -2,6 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 
+class ContentFrame extends StatelessWidget {
+  const ContentFrame({super.key, required this.child, this.maxWidth = 1080});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: child,
+    ),
+  );
+}
+
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
