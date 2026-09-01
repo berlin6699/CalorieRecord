@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recipes": [
+    {
+      "name": "鸡胸肉糙米餐",
+      "servingLabel": "一盒",
+      "energyKcal": 526,
+      "carbsG": 58.5,
+      "proteinG": 46.2,
+      "fatG": 12.1
+    },
+    {
+      "name": "香蕉燕麦酸奶杯",
+      "servingLabel": "一杯",
+      "energyKcal": 382,
+      "carbsG": 61.4,
+      "proteinG": 18.6,
+      "fatG": 7.2
+    }
+  ]
+}
