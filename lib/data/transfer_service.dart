@@ -68,7 +68,8 @@ class TransferService {
     if ((data['schemaVersion'] != 1 &&
             data['schemaVersion'] != 2 &&
             data['schemaVersion'] != 3 &&
-            data['schemaVersion'] != 4) ||
+            data['schemaVersion'] != 4 &&
+            data['schemaVersion'] != 5) ||
         data['recipes'] is! List) {
       throw const FormatException('菜谱文件版本或结构不正确');
     }
@@ -95,6 +96,8 @@ class TransferService {
           name: recipe.name,
           servingLabel: recipe.servingLabel,
           nutrition: recipe.nutrition,
+          categoryId: recipe.categoryId,
+          categoryName: recipe.categoryName,
           imageBytes: recipe.imageBytes,
           imageMimeType: recipe.imageMimeType,
         ),

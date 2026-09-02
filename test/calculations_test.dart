@@ -107,12 +107,28 @@ void main() {
         name: '带图菜谱',
         servingLabel: '一份',
         nutrition: const Nutrition(energyKcal: 320),
+        categoryId: 9,
+        categoryName: '学校食堂',
         imageBytes: Uint8List.fromList([1, 2, 3, 4]),
         imageMimeType: 'image/png',
       );
       final restored = Recipe.fromJson(original.toJson());
       expect(restored.imageBytes, [1, 2, 3, 4]);
       expect(restored.imageMimeType, 'image/png');
+      expect(restored.categoryId, 9);
+      expect(restored.categoryName, '学校食堂');
+    });
+
+    test('recipe category round-trips through backup JSON', () {
+      final original = RecipeCategory(
+        id: 4,
+        name: '临时外食',
+        createdAt: DateTime(2026, 9, 2, 15, 30),
+      );
+      final restored = RecipeCategory.fromJson(original.toJson());
+      expect(restored.id, 4);
+      expect(restored.name, '临时外食');
+      expect(restored.createdAt, DateTime(2026, 9, 2, 15, 30));
     });
   });
 

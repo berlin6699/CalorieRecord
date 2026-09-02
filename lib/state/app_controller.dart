@@ -20,6 +20,7 @@ class AppState {
     required this.meals,
     required this.exercises,
     required this.recipes,
+    required this.recipeCategories,
     required this.trainingPlans,
     required this.selectedTrainingPlanId,
     required this.bodyMeasurements,
@@ -33,6 +34,7 @@ class AppState {
   final List<MealEntry> meals;
   final List<ExerciseEntry> exercises;
   final List<Recipe> recipes;
+  final List<RecipeCategory> recipeCategories;
   final List<TrainingPlan> trainingPlans;
   final int? selectedTrainingPlanId;
   final List<BodyMeasurement> bodyMeasurements;
@@ -62,6 +64,7 @@ class AppState {
     List<MealEntry>? meals,
     List<ExerciseEntry>? exercises,
     List<Recipe>? recipes,
+    List<RecipeCategory>? recipeCategories,
     List<TrainingPlan>? trainingPlans,
     Object? selectedTrainingPlanId = _keepSelectedPlan,
     List<BodyMeasurement>? bodyMeasurements,
@@ -74,6 +77,7 @@ class AppState {
     meals: meals ?? this.meals,
     exercises: exercises ?? this.exercises,
     recipes: recipes ?? this.recipes,
+    recipeCategories: recipeCategories ?? this.recipeCategories,
     trainingPlans: trainingPlans ?? this.trainingPlans,
     selectedTrainingPlanId: identical(selectedTrainingPlanId, _keepSelectedPlan)
         ? this.selectedTrainingPlanId
@@ -96,6 +100,7 @@ class AppController extends AsyncNotifier<AppState> {
     final meals = await _database.loadMeals(selectedDate);
     final exercises = await _database.loadExercises(selectedDate);
     final recipes = await _database.loadRecipes();
+    final recipeCategories = await _database.loadRecipeCategories();
     final trainingPlans = await _database.loadTrainingPlans();
     final bodyMeasurements = await _database.loadBodyMeasurements();
     final selectedPlan = _preferredPlan(trainingPlans);
@@ -108,6 +113,7 @@ class AppController extends AsyncNotifier<AppState> {
       meals: meals,
       exercises: exercises,
       recipes: recipes,
+      recipeCategories: recipeCategories,
       trainingPlans: trainingPlans,
       selectedTrainingPlanId: selectedPlan?.id,
       bodyMeasurements: bodyMeasurements,
@@ -211,13 +217,41 @@ class AppController extends AsyncNotifier<AppState> {
     state = AsyncData(current.copyWith(recipes: await _database.loadRecipes()));
   }
 
+  Future<int> saveRecipeCategory(RecipeCategory category) async {
+    final id = await _database.saveRecipeCategory(category);
+    final current = state.requireValue;
+    state = AsyncData(
+      current.copyWith(
+        recipeCategories: await _database.loadRecipeCategories(),
+        recipes: await _database.loadRecipes(),
+      ),
+    );
+    return id;
+  }
+
+  Future<void> deleteRecipeCategory(int id) async {
+    await _database.deleteRecipeCategory(id);
+    final current = state.requireValue;
+    state = AsyncData(
+      current.copyWith(
+        recipeCategories: await _database.loadRecipeCategories(),
+        recipes: await _database.loadRecipes(),
+      ),
+    );
+  }
+
   Future<void> importRecipes(
     List<Recipe> recipes, {
     required bool overwrite,
   }) async {
     await _database.importRecipes(recipes, overwrite: overwrite);
     final current = state.requireValue;
-    state = AsyncData(current.copyWith(recipes: await _database.loadRecipes()));
+    state = AsyncData(
+      current.copyWith(
+        recipes: await _database.loadRecipes(),
+        recipeCategories: await _database.loadRecipeCategories(),
+      ),
+    );
   }
 
   Future<void> saveMeal(MealEntry meal) async {

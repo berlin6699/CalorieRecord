@@ -26,7 +26,7 @@ class AppDatabase {
     final path = p.join(root, 'energy_balance.db');
     _database = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
       onUpgrade: _upgrade,
@@ -62,6 +62,7 @@ class AppDatabase {
         target_fat REAL NOT NULL
       )
     ''');
+    await _createRecipeCategories(db);
     await db.execute('''
       CREATE TABLE recipes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +74,7 @@ class AppDatabase {
         fat REAL NOT NULL,
         image BLOB,
         image_mime TEXT,
+        category_id INTEGER REFERENCES recipe_categories(id) ON DELETE SET NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -118,6 +120,62 @@ class AppDatabase {
         "ALTER TABLE meals ADD COLUMN meal_type TEXT NOT NULL DEFAULT 'snack'",
       );
     }
+    if (oldVersion < 5) {
+      await _createRecipeCategories(db);
+      await db.execute(
+        'ALTER TABLE recipes ADD COLUMN category_id INTEGER '
+        'REFERENCES recipe_categories(id) ON DELETE SET NULL',
+      );
+      await _autoCategorizeRecipes(db);
+    }
+  }
+
+  Future<void> _createRecipeCategories(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE recipe_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await _seedRecipeCategories(db);
+  }
+
+  Future<void> _seedRecipeCategories(DatabaseExecutor db) async {
+    final now = DateTime.now().toIso8601String();
+    for (final name in ['学校食堂', '麦当劳', '临时外食', '饮品']) {
+      await db.insert('recipe_categories', {
+        'name': name,
+        'created_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  Future<void> _autoCategorizeRecipes(DatabaseExecutor db) async {
+    await db.rawUpdate('''
+      UPDATE recipes SET category_id = (
+        SELECT id FROM recipe_categories WHERE name = '麦当劳'
+      ) WHERE name IN (
+        '猪柳麦满分', '猪柳蛋麦满分', '双层猪柳蛋麦满分', '火腿扒麦满分',
+        '大脆鸡扒麦满分', '原味板烧鸡腿麦满分', '双层原味板烧鸡腿麦满分',
+        '原味板烧鸡腿炒双蛋堡', '猪柳炒双蛋堡', '火腿扒早安营养卷',
+        '图林根香肠早安营养卷', '脆薯饼', '脆香油条', '德式图林根香肠', '优品豆浆'
+      )
+    ''');
+    await db.rawUpdate('''
+      UPDATE recipes SET category_id = (
+        SELECT id FROM recipe_categories WHERE name = '学校食堂'
+      ) WHERE name IN (
+        '干炒牛河', '牛排鸡蛋杂粮蔬菜碗', '清汤牛肉面',
+        '鸡肉锅包肉米饭配炒白菜', '烤鸡腿杂粮蔬菜饭', '洋葱炒牛肉盖饭',
+        '卤牛肉豆腐白菜盖饭', '虾仁滑蛋饭'
+      )
+    ''');
+    await db.rawUpdate('''
+      UPDATE recipes SET category_id = (
+        SELECT id FROM recipe_categories WHERE name = '饮品'
+      ) WHERE name = '东鹏电解质水'
+    ''');
   }
 
   Future<void> _createTrainingPlans(DatabaseExecutor db) async {
@@ -299,9 +357,51 @@ class AppDatabase {
     ),
   );
 
+  Future<List<RecipeCategory>> loadRecipeCategories() async {
+    final db = await database;
+    final rows = await db.query(
+      'recipe_categories',
+      orderBy: 'name COLLATE NOCASE',
+    );
+    return rows.map(_recipeCategoryFromRow).toList();
+  }
+
+  Future<int> saveRecipeCategory(RecipeCategory category) async {
+    final db = await database;
+    final row = <String, Object?>{'name': category.name.trim()};
+    if (category.id == null) {
+      row['created_at'] = DateTime.now().toIso8601String();
+      return db.insert('recipe_categories', row);
+    }
+    await db.update(
+      'recipe_categories',
+      row,
+      where: 'id = ?',
+      whereArgs: [category.id],
+    );
+    return category.id!;
+  }
+
+  Future<void> deleteRecipeCategory(int id) async {
+    final db = await database;
+    await db.delete('recipe_categories', where: 'id = ?', whereArgs: [id]);
+  }
+
+  RecipeCategory _recipeCategoryFromRow(Map<String, Object?> row) =>
+      RecipeCategory(
+        id: (row['id'] as num).toInt(),
+        name: row['name'] as String,
+        createdAt: DateTime.parse(row['created_at'] as String),
+      );
+
   Future<List<Recipe>> loadRecipes() async {
     final db = await database;
-    final rows = await db.query('recipes', orderBy: 'name COLLATE NOCASE');
+    final rows = await db.rawQuery('''
+      SELECT recipes.*, recipe_categories.name AS category_name
+      FROM recipes
+      LEFT JOIN recipe_categories ON recipe_categories.id = recipes.category_id
+      ORDER BY recipe_categories.name COLLATE NOCASE, recipes.name COLLATE NOCASE
+    ''');
     return rows.map(_recipeFromRow).toList();
   }
 
@@ -317,6 +417,7 @@ class AppDatabase {
       'fat': recipe.nutrition.fatG,
       'image': recipe.imageBytes,
       'image_mime': recipe.imageMimeType,
+      'category_id': recipe.categoryId,
       'updated_at': now,
     };
     if (recipe.id == null) {
@@ -344,6 +445,8 @@ class AppDatabase {
     ),
     imageBytes: row['image'] as Uint8List?,
     imageMimeType: row['image_mime'] as String?,
+    categoryId: (row['category_id'] as num?)?.toInt(),
+    categoryName: row['category_name'] as String?,
   );
 
   Future<List<MealEntry>> loadMeals(DateTime date) async {
@@ -629,6 +732,7 @@ class AppDatabase {
     final goals = await loadGoals();
     final dayRows = await db.query('day_records', orderBy: 'date');
     final recipes = await loadRecipes();
+    final recipeCategories = await loadRecipeCategories();
     final mealRows = await db.query('meals', orderBy: 'date, created_at');
     final exerciseRows = await db.query(
       'exercises',
@@ -637,12 +741,15 @@ class AppDatabase {
     final trainingPlans = await loadTrainingPlans();
     final bodyMeasurements = await loadBodyMeasurements();
     return {
-      'schemaVersion': 4,
+      'schemaVersion': 5,
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': profile.toJson(),
       'goals': goals.values.map((item) => item.toJson()).toList(),
       'days': dayRows.map(_dayFromRow).map((item) => item.toJson()).toList(),
       'recipes': recipes.map((item) => item.toJson()).toList(),
+      'recipeCategories': recipeCategories
+          .map((item) => item.toJson())
+          .toList(),
       'meals': mealRows.map(_mealFromRow).map((item) => item.toJson()).toList(),
       'exercises': exerciseRows
           .map(_exerciseFromRow)
@@ -669,6 +776,13 @@ class AppDatabase {
     final recipes = (data['recipes'] as List)
         .map((item) => Recipe.fromJson(item as Map<String, dynamic>))
         .toList();
+    final recipeCategories = data['recipeCategories'] == null
+        ? <RecipeCategory>[]
+        : (data['recipeCategories'] as List)
+              .map(
+                (item) => RecipeCategory.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
     final meals = (data['meals'] as List)
         .map((item) => MealEntry.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -697,6 +811,7 @@ class AppDatabase {
         'exercises',
         'day_records',
         'recipes',
+        'recipe_categories',
         'goals',
         'training_plans',
         'body_measurements',
@@ -713,6 +828,17 @@ class AppDatabase {
       for (final day in days) {
         await txn.insert('day_records', _dayRow(day));
       }
+      if (recipeCategories.isEmpty) {
+        await _seedRecipeCategories(txn);
+      } else {
+        for (final category in recipeCategories) {
+          await txn.insert('recipe_categories', {
+            'id': category.id,
+            'name': category.name,
+            'created_at': category.createdAt.toIso8601String(),
+          });
+        }
+      }
       for (final recipe in recipes) {
         final row = <String, Object?>{
           ..._recipeBackupRow(recipe),
@@ -720,6 +846,7 @@ class AppDatabase {
         };
         await txn.insert('recipes', row);
       }
+      if (recipeCategories.isEmpty) await _autoCategorizeRecipes(txn);
       for (final meal in meals) {
         await txn.insert('meals', _mealRow(meal));
       }
@@ -746,6 +873,7 @@ class AppDatabase {
       'fat': recipe.nutrition.fatG,
       'image': recipe.imageBytes,
       'image_mime': recipe.imageMimeType,
+      'category_id': recipe.categoryId,
       'created_at': stamp,
       'updated_at': stamp,
     };
@@ -772,6 +900,26 @@ class AppDatabase {
           continue;
         }
         final row = _recipeBackupRow(recipe);
+        if (recipe.categoryName != null &&
+            recipe.categoryName!.trim().isNotEmpty) {
+          final categoryRows = await txn.query(
+            'recipe_categories',
+            columns: ['id'],
+            where: 'name = ? COLLATE NOCASE',
+            whereArgs: [recipe.categoryName!.trim()],
+            limit: 1,
+          );
+          row['category_id'] = categoryRows.isEmpty
+              ? await txn.insert('recipe_categories', {
+                  'name': recipe.categoryName!.trim(),
+                  'created_at': DateTime.now().toIso8601String(),
+                })
+              : categoryRows.first['id'];
+        } else if (existing.isNotEmpty) {
+          row.remove('category_id');
+        } else {
+          row['category_id'] = null;
+        }
         if (existing.isNotEmpty) {
           await txn.update(
             'recipes',
@@ -793,7 +941,8 @@ class AppDatabase {
     if (schemaVersion != 1 &&
         schemaVersion != 2 &&
         schemaVersion != 3 &&
-        schemaVersion != 4) {
+        schemaVersion != 4 &&
+        schemaVersion != 5) {
       throw const FormatException('不支持的备份版本');
     }
     for (final key in [
@@ -806,13 +955,19 @@ class AppDatabase {
     ]) {
       if (!data.containsKey(key)) throw FormatException('备份缺少字段：$key');
     }
-    if ((schemaVersion == 2 || schemaVersion == 3 || schemaVersion == 4) &&
+    if ((schemaVersion == 2 ||
+            schemaVersion == 3 ||
+            schemaVersion == 4 ||
+            schemaVersion == 5) &&
         data['trainingPlans'] is! List) {
       throw const FormatException('备份缺少训练计划数据');
     }
-    if ((schemaVersion == 3 || schemaVersion == 4) &&
+    if ((schemaVersion == 3 || schemaVersion == 4 || schemaVersion == 5) &&
         data['bodyMeasurements'] is! List) {
       throw const FormatException('备份缺少身体测量数据');
+    }
+    if (schemaVersion == 5 && data['recipeCategories'] is! List) {
+      throw const FormatException('备份缺少菜谱分类数据');
     }
   }
 }

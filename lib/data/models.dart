@@ -252,12 +252,36 @@ class DayRecord {
   );
 }
 
+class RecipeCategory {
+  const RecipeCategory({this.id, required this.name, required this.createdAt});
+
+  final int? id;
+  final String name;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    if (id != null) 'id': id,
+    'name': name,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory RecipeCategory.fromJson(Map<String, dynamic> json) => RecipeCategory(
+    id: (json['id'] as num?)?.toInt(),
+    name: (json['name'] as String).trim(),
+    createdAt: json['createdAt'] is String
+        ? DateTime.parse(json['createdAt'] as String)
+        : DateTime.now(),
+  );
+}
+
 class Recipe {
   const Recipe({
     this.id,
     required this.name,
     required this.servingLabel,
     required this.nutrition,
+    this.categoryId,
+    this.categoryName,
     this.imageBytes,
     this.imageMimeType,
   });
@@ -266,6 +290,8 @@ class Recipe {
   final String name;
   final String servingLabel;
   final Nutrition nutrition;
+  final int? categoryId;
+  final String? categoryName;
   final Uint8List? imageBytes;
   final String? imageMimeType;
 
@@ -274,6 +300,8 @@ class Recipe {
     name: name,
     servingLabel: servingLabel,
     nutrition: nutrition,
+    categoryId: categoryId,
+    categoryName: categoryName,
     imageBytes: imageBytes,
     imageMimeType: imageMimeType,
   );
@@ -283,6 +311,8 @@ class Recipe {
     'name': name,
     'servingLabel': servingLabel,
     ...nutrition.toJson(),
+    if (categoryId != null) 'categoryId': categoryId,
+    if (categoryName != null) 'categoryName': categoryName,
     if (imageBytes != null) 'imageBase64': base64Encode(imageBytes!),
     if (imageMimeType != null) 'imageMimeType': imageMimeType,
   };
@@ -292,6 +322,8 @@ class Recipe {
     name: (json['name'] as String).trim(),
     servingLabel: (json['servingLabel'] as String).trim(),
     nutrition: Nutrition.fromJson(json),
+    categoryId: (json['categoryId'] as num?)?.toInt(),
+    categoryName: json['categoryName'] as String?,
     imageBytes: json['imageBase64'] is String
         ? base64Decode(json['imageBase64'] as String)
         : null,
