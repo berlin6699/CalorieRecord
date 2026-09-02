@@ -106,6 +106,7 @@ class TodayScreen extends ConsumerWidget {
                       for (var i = 0; i < data.meals.length; i++) ...[
                         _MealTile(
                           meal: data.meals[i],
+                          recipe: _recipeForMeal(data.recipes, data.meals[i]),
                           onEdit: () => _editMeal(context, ref, data.meals[i]),
                           onDelete: () =>
                               _deleteMeal(context, ref, data.meals[i]),
@@ -295,6 +296,10 @@ class TodayScreen extends ConsumerWidget {
                                       ) ...[
                                         _MealTile(
                                           meal: data.meals[i],
+                                          recipe: _recipeForMeal(
+                                            data.recipes,
+                                            data.meals[i],
+                                          ),
                                           onEdit: () => _editMeal(
                                             context,
                                             ref,
@@ -1091,10 +1096,12 @@ class _NutrientCard extends StatelessWidget {
 class _MealTile extends StatelessWidget {
   const _MealTile({
     required this.meal,
+    required this.recipe,
     required this.onEdit,
     required this.onDelete,
   });
   final MealEntry meal;
+  final Recipe? recipe;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -1102,10 +1109,20 @@ class _MealTile extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     isThreeLine: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
-    leading: CircleAvatar(
-      backgroundColor: _mealTypeColor(meal.mealType).withValues(alpha: 0.14),
-      foregroundColor: _mealTypeColor(meal.mealType),
-      child: Icon(_mealTypeIcon(meal.mealType)),
+    leading: ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: recipe?.imageBytes == null
+            ? _MealFallbackIcon(mealType: meal.mealType)
+            : Image.memory(
+                recipe!.imageBytes!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) =>
+                    _MealFallbackIcon(mealType: meal.mealType),
+              ),
+      ),
     ),
     title: Row(
       children: [
@@ -1163,6 +1180,18 @@ class _MealTile extends StatelessWidget {
         PopupMenuItem(value: 'delete', child: Text('删除')),
       ],
     ),
+  );
+}
+
+class _MealFallbackIcon extends StatelessWidget {
+  const _MealFallbackIcon({required this.mealType});
+
+  final MealType mealType;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: _mealTypeColor(mealType).withValues(alpha: 0.14),
+    child: Icon(_mealTypeIcon(mealType), color: _mealTypeColor(mealType)),
   );
 }
 
@@ -1394,6 +1423,18 @@ Map<MealType, double> _mealBreakdown(
         .where((meal) => meal.mealType == type)
         .fold<double>(0, (sum, meal) => sum + select(meal.total)),
 };
+
+Recipe? _recipeForMeal(List<Recipe> recipes, MealEntry meal) {
+  if (meal.recipeId != null) {
+    for (final recipe in recipes) {
+      if (recipe.id == meal.recipeId) return recipe;
+    }
+  }
+  for (final recipe in recipes) {
+    if (recipe.name == meal.recipeName) return recipe;
+  }
+  return null;
+}
 
 Color _mealTypeColor(MealType type) => switch (type) {
   MealType.breakfast => const Color(0xFFE9A023),
