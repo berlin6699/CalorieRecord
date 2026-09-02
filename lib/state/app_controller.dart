@@ -170,7 +170,26 @@ class AppController extends AsyncNotifier<AppState> {
       await _refreshTrends();
       return;
     }
-    state = AsyncData(current.copyWith(profile: profile));
+    final today = dayOnly(DateTime.now());
+    final existingToday =
+        await _database.getDay(today) ??
+        await _database.ensureDay(today, profile, current.goals);
+    final updatedToday = DayRecord(
+      date: today,
+      type: existingToday.type,
+      baselineKcal: profile.baselineKcal,
+      target: existingToday.target,
+    );
+    await _database.saveDay(updatedToday);
+    state = AsyncData(
+      current.copyWith(
+        profile: profile,
+        day: dateKey(current.selectedDate) == dateKey(today)
+            ? updatedToday
+            : current.day,
+      ),
+    );
+    await _refreshTrends();
   }
 
   Future<void> saveGoal(DayGoal goal) async {
