@@ -426,7 +426,7 @@ class SettingsScreen extends ConsumerWidget {
                                       icon: Icons.storage_outlined,
                                       title: '当前版本',
                                       message:
-                                          'CalorieRecord v1.0.1 · Windows x64',
+                                          'CalorieRecord v1.0.2 · Windows x64',
                                       color: Theme.of(context)
                                           .colorScheme
                                           .primary,

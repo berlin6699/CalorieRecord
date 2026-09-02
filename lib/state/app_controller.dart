@@ -9,6 +9,8 @@ final appControllerProvider = AsyncNotifierProvider<AppController, AppState>(
   AppController.new,
 );
 
+const _keepSelectedPlan = Object();
+
 class AppState {
   const AppState({
     required this.profile,
@@ -18,6 +20,8 @@ class AppState {
     required this.meals,
     required this.exercises,
     required this.recipes,
+    required this.trainingPlans,
+    required this.selectedTrainingPlanId,
     required this.trends,
   });
 
@@ -28,7 +32,16 @@ class AppState {
   final List<MealEntry> meals;
   final List<ExerciseEntry> exercises;
   final List<Recipe> recipes;
+  final List<TrainingPlan> trainingPlans;
+  final int? selectedTrainingPlanId;
   final List<DailySummary> trends;
+
+  TrainingPlan? get selectedTrainingPlan {
+    for (final plan in trainingPlans) {
+      if (plan.id == selectedTrainingPlanId) return plan;
+    }
+    return null;
+  }
 
   Nutrition get intake =>
       meals.fold(const Nutrition(), (total, meal) => total + meal.total);
@@ -47,6 +60,8 @@ class AppState {
     List<MealEntry>? meals,
     List<ExerciseEntry>? exercises,
     List<Recipe>? recipes,
+    List<TrainingPlan>? trainingPlans,
+    Object? selectedTrainingPlanId = _keepSelectedPlan,
     List<DailySummary>? trends,
   }) => AppState(
     profile: profile ?? this.profile,
@@ -56,6 +71,10 @@ class AppState {
     meals: meals ?? this.meals,
     exercises: exercises ?? this.exercises,
     recipes: recipes ?? this.recipes,
+    trainingPlans: trainingPlans ?? this.trainingPlans,
+    selectedTrainingPlanId: identical(selectedTrainingPlanId, _keepSelectedPlan)
+        ? this.selectedTrainingPlanId
+        : selectedTrainingPlanId as int?,
     trends: trends ?? this.trends,
   );
 }
@@ -73,10 +92,9 @@ class AppController extends AsyncNotifier<AppState> {
     final meals = await _database.loadMeals(selectedDate);
     final exercises = await _database.loadExercises(selectedDate);
     final recipes = await _database.loadRecipes();
-    final trends = await _database.summaries(
-      dayOnly(DateTime.now()).subtract(const Duration(days: 89)),
-      dayOnly(DateTime.now()),
-    );
+    final trainingPlans = await _database.loadTrainingPlans();
+    final selectedPlan = _preferredPlan(trainingPlans);
+    final trends = await _summariesForPlan(selectedPlan);
     return AppState(
       profile: profile,
       goals: goals,
@@ -85,6 +103,8 @@ class AppController extends AsyncNotifier<AppState> {
       meals: meals,
       exercises: exercises,
       recipes: recipes,
+      trainingPlans: trainingPlans,
+      selectedTrainingPlanId: selectedPlan?.id,
       trends: trends,
     );
   }
@@ -195,6 +215,54 @@ class AppController extends AsyncNotifier<AppState> {
     await _refreshDayEntries();
   }
 
+  Future<void> selectTrainingPlan(int id) async {
+    final current = state.requireValue;
+    final plan = current.trainingPlans.where((item) => item.id == id).first;
+    final trends = await _summariesForPlan(plan);
+    state = AsyncData(
+      current.copyWith(selectedTrainingPlanId: id, trends: trends),
+    );
+  }
+
+  Future<void> saveTrainingPlan(TrainingPlan plan) async {
+    final id = await _database.saveTrainingPlan(plan);
+    final current = state.requireValue;
+    final plans = await _database.loadTrainingPlans();
+    final saved = plans.where((item) => item.id == id).first;
+    final trends = await _summariesForPlan(saved);
+    state = AsyncData(
+      current.copyWith(
+        trainingPlans: plans,
+        selectedTrainingPlanId: id,
+        trends: trends,
+      ),
+    );
+  }
+
+  Future<void> deleteTrainingPlan(int id) async {
+    await _database.deleteTrainingPlan(id);
+    final current = state.requireValue;
+    final plans = await _database.loadTrainingPlans();
+    TrainingPlan? selected;
+    if (current.selectedTrainingPlanId != id) {
+      for (final plan in plans) {
+        if (plan.id == current.selectedTrainingPlanId) {
+          selected = plan;
+          break;
+        }
+      }
+    }
+    selected ??= _preferredPlan(plans);
+    final trends = await _summariesForPlan(selected);
+    state = AsyncData(
+      current.copyWith(
+        trainingPlans: plans,
+        selectedTrainingPlanId: selected?.id,
+        trends: trends,
+      ),
+    );
+  }
+
   Future<void> _refreshDayEntries() async {
     final current = state.requireValue;
     final meals = await _database.loadMeals(current.selectedDate);
@@ -204,11 +272,27 @@ class AppController extends AsyncNotifier<AppState> {
   }
 
   Future<void> _refreshTrends() async {
-    final today = dayOnly(DateTime.now());
-    final trends = await _database.summaries(
-      today.subtract(const Duration(days: 89)),
-      today,
+    final trends = await _summariesForPlan(
+      state.requireValue.selectedTrainingPlan,
     );
     state = AsyncData(state.requireValue.copyWith(trends: trends));
+  }
+
+  TrainingPlan? _preferredPlan(List<TrainingPlan> plans) {
+    final today = dayOnly(DateTime.now());
+    for (final plan in plans) {
+      if (plan.includes(today)) return plan;
+    }
+    return plans.isEmpty ? null : plans.first;
+  }
+
+  Future<List<DailySummary>> _summariesForPlan(TrainingPlan? plan) async {
+    if (plan == null) return const [];
+    final today = dayOnly(DateTime.now());
+    final start = dayOnly(plan.startDate);
+    var end = plan.endDate == null ? today : dayOnly(plan.endDate!);
+    if (end.isAfter(today)) end = today;
+    if (end.isBefore(start)) return const [];
+    return _database.summaries(start, end);
   }
 }

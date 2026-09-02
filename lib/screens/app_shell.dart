@@ -84,9 +84,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                       label: '菜谱',
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.insights_outlined),
-                      selectedIcon: Icon(Icons.insights_rounded),
-                      label: '趋势',
+                      icon: Icon(Icons.flag_outlined),
+                      selectedIcon: Icon(Icons.flag_rounded),
+                      label: '计划',
                     ),
                     NavigationDestination(
                       icon: Icon(Icons.tune_outlined),
@@ -134,7 +134,7 @@ class _DesktopSidebar extends StatelessWidget {
   static const _items = [
     (Icons.space_dashboard_outlined, Icons.space_dashboard_rounded, '今日概览'),
     (Icons.menu_book_outlined, Icons.menu_book_rounded, '我的菜谱'),
-    (Icons.query_stats_outlined, Icons.query_stats_rounded, '趋势分析'),
+    (Icons.flag_outlined, Icons.flag_rounded, '训练计划'),
     (Icons.tune_outlined, Icons.tune_rounded, '个人与设置'),
   ];
 
@@ -206,7 +206,7 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'CalorieRecord v1.0.1',
+                        'CalorieRecord v1.0.2',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.45),
                           fontSize: 10,

@@ -65,7 +65,8 @@ class TransferService {
   Future<List<Recipe>?> pickRecipeFile() async {
     final data = await pickJson();
     if (data == null) return null;
-    if (data['schemaVersion'] != 1 || data['recipes'] is! List) {
+    if ((data['schemaVersion'] != 1 && data['schemaVersion'] != 2) ||
+        data['recipes'] is! List) {
       throw const FormatException('菜谱文件版本或结构不正确');
     }
     final recipes = <Recipe>[];

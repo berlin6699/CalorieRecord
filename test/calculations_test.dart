@@ -86,4 +86,51 @@ void main() {
   test('date keys ignore the time component', () {
     expect(dateKey(DateTime(2026, 9, 1, 23, 59)), '2026-09-01');
   });
+
+  group('training plans', () {
+    test('includes both boundaries of a fixed plan', () {
+      final plan = TrainingPlan(
+        name: '秋季减脂',
+        type: TrainingPlanType.cutting,
+        startDate: DateTime(2026, 9, 1),
+        endDate: DateTime(2026, 10, 31),
+        createdAt: DateTime(2026, 9, 1),
+      );
+
+      expect(plan.includes(DateTime(2026, 8, 31)), isFalse);
+      expect(plan.includes(DateTime(2026, 9, 1, 23, 59)), isTrue);
+      expect(plan.includes(DateTime(2026, 10, 31, 23, 59)), isTrue);
+      expect(plan.includes(DateTime(2026, 11, 1)), isFalse);
+      expect(plan.plannedDays, 61);
+    });
+
+    test('an ongoing plan has no upper date boundary', () {
+      final plan = TrainingPlan(
+        name: '增肌期',
+        type: TrainingPlanType.bulking,
+        startDate: DateTime(2026, 1, 1),
+        createdAt: DateTime(2026, 1, 1),
+      );
+
+      expect(plan.includes(DateTime(2099, 1, 1)), isTrue);
+    });
+
+    test('round-trips through backup JSON', () {
+      final original = TrainingPlan(
+        id: 7,
+        name: '维持阶段',
+        type: TrainingPlanType.maintaining,
+        startDate: DateTime(2026, 9, 2),
+        endDate: DateTime(2026, 9, 30),
+        createdAt: DateTime(2026, 9, 2, 8, 30),
+      );
+
+      final restored = TrainingPlan.fromJson(original.toJson());
+      expect(restored.id, 7);
+      expect(restored.name, '维持阶段');
+      expect(restored.type, TrainingPlanType.maintaining);
+      expect(dateKey(restored.startDate), '2026-09-02');
+      expect(dateKey(restored.endDate!), '2026-09-30');
+    });
+  });
 }

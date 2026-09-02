@@ -25,9 +25,10 @@ class AppDatabase {
     final path = p.join(root, 'energy_balance.db');
     _database = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
+      onUpgrade: _upgrade,
     );
     await _seed();
     return _database!;
@@ -99,6 +100,29 @@ class AppDatabase {
       )
     ''');
     await db.execute('CREATE INDEX idx_exercises_date ON exercises(date)');
+    await _createTrainingPlans(db);
+  }
+
+  Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) await _createTrainingPlans(db);
+  }
+
+  Future<void> _createTrainingPlans(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE training_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_training_plans_dates '
+      'ON training_plans(start_date, end_date)',
+    );
   }
 
   Future<void> _seed() async {
@@ -379,6 +403,67 @@ class AppDatabase {
     createdAt: DateTime.parse(row['created_at'] as String),
   );
 
+  Future<List<TrainingPlan>> loadTrainingPlans() async {
+    final db = await database;
+    final rows = await db.query(
+      'training_plans',
+      orderBy: 'start_date DESC, created_at DESC',
+    );
+    return rows.map(_trainingPlanFromRow).toList();
+  }
+
+  Future<int> saveTrainingPlan(TrainingPlan plan) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    final row = <String, Object?>{
+      'name': plan.name.trim(),
+      'type': plan.type.name,
+      'start_date': dateKey(plan.startDate),
+      'end_date': plan.endDate == null ? null : dateKey(plan.endDate!),
+      'updated_at': now,
+    };
+    if (plan.id == null) {
+      row['created_at'] = now;
+      return db.insert('training_plans', row);
+    }
+    await db.update(
+      'training_plans',
+      row,
+      where: 'id = ?',
+      whereArgs: [plan.id],
+    );
+    return plan.id!;
+  }
+
+  Future<void> deleteTrainingPlan(int id) async {
+    final db = await database;
+    await db.delete('training_plans', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Map<String, Object?> _trainingPlanRow(TrainingPlan plan) {
+    final now = DateTime.now().toIso8601String();
+    return {
+      'id': plan.id,
+      'name': plan.name,
+      'type': plan.type.name,
+      'start_date': dateKey(plan.startDate),
+      'end_date': plan.endDate == null ? null : dateKey(plan.endDate!),
+      'created_at': plan.createdAt.toIso8601String(),
+      'updated_at': now,
+    };
+  }
+
+  TrainingPlan _trainingPlanFromRow(Map<String, Object?> row) => TrainingPlan(
+    id: (row['id'] as num).toInt(),
+    name: row['name'] as String,
+    type: TrainingPlanType.values.byName(row['type'] as String),
+    startDate: DateTime.parse(row['start_date'] as String),
+    endDate: row['end_date'] == null
+        ? null
+        : DateTime.parse(row['end_date'] as String),
+    createdAt: DateTime.parse(row['created_at'] as String),
+  );
+
   Future<List<DailySummary>> summaries(DateTime from, DateTime to) async {
     final db = await database;
     final dayRows = await db.query(
@@ -439,8 +524,9 @@ class AppDatabase {
       'exercises',
       orderBy: 'date, created_at',
     );
+    final trainingPlans = await loadTrainingPlans();
     return {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': profile.toJson(),
       'goals': goals.values.map((item) => item.toJson()).toList(),
@@ -451,6 +537,7 @@ class AppDatabase {
           .map(_exerciseFromRow)
           .map((item) => item.toJson())
           .toList(),
+      'trainingPlans': trainingPlans.map((item) => item.toJson()).toList(),
     };
   }
 
@@ -474,6 +561,13 @@ class AppDatabase {
     final exercises = (data['exercises'] as List)
         .map((item) => ExerciseEntry.fromJson(item as Map<String, dynamic>))
         .toList();
+    final trainingPlans = data['trainingPlans'] == null
+        ? <TrainingPlan>[]
+        : (data['trainingPlans'] as List)
+              .map(
+                (item) => TrainingPlan.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
     final db = await database;
     await db.transaction((txn) async {
       for (final table in [
@@ -482,6 +576,7 @@ class AppDatabase {
         'day_records',
         'recipes',
         'goals',
+        'training_plans',
       ]) {
         await txn.delete(table);
       }
@@ -507,6 +602,9 @@ class AppDatabase {
       }
       for (final exercise in exercises) {
         await txn.insert('exercises', _exerciseRow(exercise));
+      }
+      for (final plan in trainingPlans) {
+        await txn.insert('training_plans', _trainingPlanRow(plan));
       }
     });
   }
@@ -563,7 +661,8 @@ class AppDatabase {
   }
 
   void _validateBackup(Map<String, dynamic> data) {
-    if (data['schemaVersion'] != 1) {
+    final schemaVersion = data['schemaVersion'];
+    if (schemaVersion != 1 && schemaVersion != 2) {
       throw const FormatException('不支持的备份版本');
     }
     for (final key in [
@@ -575,6 +674,9 @@ class AppDatabase {
       'exercises',
     ]) {
       if (!data.containsKey(key)) throw FormatException('备份缺少字段：$key');
+    }
+    if (schemaVersion == 2 && data['trainingPlans'] is! List) {
+      throw const FormatException('备份缺少训练计划数据');
     }
   }
 }

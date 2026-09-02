@@ -4,6 +4,17 @@ enum Sex { male, female }
 
 enum DayType { cardio, strength, rest }
 
+enum TrainingPlanType { cutting, maintaining, bulking, custom }
+
+extension TrainingPlanTypeX on TrainingPlanType {
+  String get label => switch (this) {
+    TrainingPlanType.cutting => '减脂期',
+    TrainingPlanType.maintaining => '维持期',
+    TrainingPlanType.bulking => '增肌期',
+    TrainingPlanType.custom => '自定义',
+  };
+}
+
 extension DayTypeX on DayType {
   String get label => switch (this) {
     DayType.cardio => '有氧日',
@@ -337,6 +348,58 @@ class ExerciseEntry {
     date: DateTime.parse(json['date'] as String),
     name: json['name'] as String,
     energyKcal: _number(json['energyKcal']),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+  );
+}
+
+class TrainingPlan {
+  const TrainingPlan({
+    this.id,
+    required this.name,
+    required this.type,
+    required this.startDate,
+    this.endDate,
+    required this.createdAt,
+  });
+
+  final int? id;
+  final String name;
+  final TrainingPlanType type;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final DateTime createdAt;
+
+  bool includes(DateTime date) {
+    final day = dayOnly(date);
+    return !day.isBefore(dayOnly(startDate)) &&
+        (endDate == null || !day.isAfter(dayOnly(endDate!)));
+  }
+
+  int get plannedDays => math.max(
+    0,
+    (endDate == null ? dayOnly(DateTime.now()) : dayOnly(endDate!))
+            .difference(dayOnly(startDate))
+            .inDays +
+        1,
+  );
+
+  Map<String, dynamic> toJson() => {
+    if (id != null) 'id': id,
+    'name': name,
+    'type': type.name,
+    'startDate': dateKey(startDate),
+    if (endDate != null) 'endDate': dateKey(endDate!),
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory TrainingPlan.fromJson(Map<String, dynamic> json) => TrainingPlan(
+    id: (json['id'] as num?)?.toInt(),
+    name: (json['name'] as String).trim(),
+    type: TrainingPlanType.values.byName(json['type'] as String),
+    startDate: DateTime.parse(json['startDate'] as String),
+    endDate: json['endDate'] == null
+        ? null
+        : DateTime.parse(json['endDate'] as String),
     createdAt: DateTime.parse(json['createdAt'] as String),
   );
 }
