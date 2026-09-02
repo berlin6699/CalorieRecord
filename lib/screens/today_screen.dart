@@ -72,7 +72,7 @@ class TodayScreen extends ConsumerWidget {
               const SizedBox(height: 18),
               _EnergyHero(summary: summary),
               const SizedBox(height: 18),
-              _NutritionGrid(summary: summary),
+              _NutritionGrid(summary: summary, meals: data.meals),
               const SizedBox(height: 28),
               SectionHeader(
                 title: '今日餐食',
@@ -258,7 +258,10 @@ class TodayScreen extends ConsumerWidget {
                         const SizedBox(width: 18),
                         Expanded(
                           flex: 4,
-                          child: _DesktopNutritionPanel(summary: summary),
+                          child: _DesktopNutritionPanel(
+                            summary: summary,
+                            meals: data.meals,
+                          ),
                         ),
                       ],
                     ),
@@ -486,9 +489,10 @@ class TodayScreen extends ConsumerWidget {
 }
 
 class _DesktopNutritionPanel extends StatelessWidget {
-  const _DesktopNutritionPanel({required this.summary});
+  const _DesktopNutritionPanel({required this.summary, required this.meals});
 
   final DailySummary summary;
+  final List<MealEntry> meals;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -518,26 +522,28 @@ class _DesktopNutritionPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          const _MealTypeLegend(),
           const SizedBox(height: 18),
           _DesktopNutrientRow(
             label: '碳水',
             actual: summary.intake.carbsG,
             target: summary.record.target.carbsG,
-            color: const Color(0xFF3B82F6),
+            breakdown: _mealBreakdown(meals, (value) => value.carbsG),
           ),
           const SizedBox(height: 16),
           _DesktopNutrientRow(
             label: '蛋白质',
             actual: summary.intake.proteinG,
             target: summary.record.target.proteinG,
-            color: const Color(0xFF8B5CF6),
+            breakdown: _mealBreakdown(meals, (value) => value.proteinG),
           ),
           const SizedBox(height: 16),
           _DesktopNutrientRow(
             label: '脂肪',
             actual: summary.intake.fatG,
             target: summary.record.target.fatG,
-            color: const Color(0xFFF59E0B),
+            breakdown: _mealBreakdown(meals, (value) => value.fatG),
           ),
         ],
       ),
@@ -550,17 +556,16 @@ class _DesktopNutrientRow extends StatelessWidget {
     required this.label,
     required this.actual,
     required this.target,
-    required this.color,
+    required this.breakdown,
   });
 
   final String label;
   final double actual;
   final double target;
-  final Color color;
+  final Map<MealType, double> breakdown;
 
   @override
   Widget build(BuildContext context) {
-    final ratio = target <= 0 ? 0.0 : (actual / target).clamp(0.0, 1.0);
     final reached = target > 0 && actual >= target;
     return Column(
       children: [
@@ -574,15 +579,7 @@ class _DesktopNutrientRow extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(99),
-                child: LinearProgressIndicator(
-                  value: ratio,
-                  minHeight: 7,
-                  color: color,
-                  backgroundColor: color.withValues(alpha: 0.12),
-                ),
-              ),
+              child: _StackedNutritionBar(target: target, breakdown: breakdown),
             ),
             const SizedBox(width: 14),
             SizedBox(
@@ -891,8 +888,9 @@ class _HeroDivider extends StatelessWidget {
 }
 
 class _NutritionGrid extends StatelessWidget {
-  const _NutritionGrid({required this.summary});
+  const _NutritionGrid({required this.summary, required this.meals});
   final DailySummary summary;
+  final List<MealEntry> meals;
 
   @override
   Widget build(BuildContext context) {
@@ -901,37 +899,141 @@ class _NutritionGrid extends StatelessWidget {
         '碳水',
         summary.intake.carbsG,
         summary.record.target.carbsG,
-        const Color(0xFF3B82F6),
+        _mealBreakdown(meals, (value) => value.carbsG),
       ),
       (
         '蛋白质',
         summary.intake.proteinG,
         summary.record.target.proteinG,
-        const Color(0xFF8B5CF6),
+        _mealBreakdown(meals, (value) => value.proteinG),
       ),
       (
         '脂肪',
         summary.intake.fatG,
         summary.record.target.fatG,
-        const Color(0xFFF59E0B),
+        _mealBreakdown(meals, (value) => value.fatG),
       ),
     ];
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < items.length; i++) ...[
-          Expanded(
-            child: _NutrientCard(
-              label: items[i].$1,
-              actual: items[i].$2,
-              target: items[i].$3,
-              color: items[i].$4,
-            ),
-          ),
-          if (i != items.length - 1) const SizedBox(width: 10),
-        ],
+        const _MealTypeLegend(),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              Expanded(
+                child: _NutrientCard(
+                  label: items[i].$1,
+                  actual: items[i].$2,
+                  target: items[i].$3,
+                  breakdown: items[i].$4,
+                ),
+              ),
+              if (i != items.length - 1) const SizedBox(width: 10),
+            ],
+          ],
+        ),
       ],
     );
   }
+}
+
+class _MealTypeLegend extends StatelessWidget {
+  const _MealTypeLegend();
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 14,
+    runSpacing: 7,
+    children: [
+      for (final type in MealType.values)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: _mealTypeColor(type),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              type.label,
+              style: const TextStyle(
+                color: Color(0xFF65726C),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+    ],
+  );
+}
+
+class _StackedNutritionBar extends StatelessWidget {
+  const _StackedNutritionBar({required this.target, required this.breakdown});
+
+  final double target;
+  final Map<MealType, double> breakdown;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final total = breakdown.values.fold<double>(
+        0,
+        (sum, value) => sum + value,
+      );
+      final scale = (total > target ? total : target)
+          .clamp(1, double.infinity)
+          .toDouble();
+      var offset = 0.0;
+      final segments = <Widget>[];
+      for (final type in MealType.values) {
+        final value = breakdown[type] ?? 0;
+        if (value <= 0) continue;
+        final width = constraints.maxWidth * value / scale;
+        segments.add(
+          Positioned(
+            left: offset,
+            top: 0,
+            bottom: 0,
+            width: width,
+            child: ColoredBox(color: _mealTypeColor(type)),
+          ),
+        );
+        offset += width;
+      }
+      final targetPosition = constraints.maxWidth * target / scale;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(99),
+        child: SizedBox(
+          height: 8,
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: ColoredBox(color: Color(0xFFE8ECEA)),
+              ),
+              ...segments,
+              if (total > target && target > 0)
+                Positioned(
+                  left: (targetPosition - 1)
+                      .clamp(0, constraints.maxWidth - 2)
+                      .toDouble(),
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  child: const ColoredBox(color: Colors.white),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _NutrientCard extends StatelessWidget {
@@ -939,13 +1041,13 @@ class _NutrientCard extends StatelessWidget {
     required this.label,
     required this.actual,
     required this.target,
-    required this.color,
+    required this.breakdown,
   });
 
   final String label;
   final double actual;
   final double target;
-  final Color color;
+  final Map<MealType, double> breakdown;
 
   @override
   Widget build(BuildContext context) {
@@ -967,20 +1069,7 @@ class _NutrientCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 10),
-            TweenAnimationBuilder<double>(
-              tween: Tween(
-                begin: 0,
-                end: target <= 0 ? 0 : (actual / target).clamp(0, 1),
-              ),
-              duration: const Duration(milliseconds: 450),
-              builder: (context, value, child) => LinearProgressIndicator(
-                value: value,
-                color: color,
-                backgroundColor: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(99),
-                minHeight: 6,
-              ),
-            ),
+            _StackedNutritionBar(target: target, breakdown: breakdown),
             const SizedBox(height: 8),
             Text(
               gap >= 0 ? '还差 ${_one(gap)}g' : '超出 ${_one(gap.abs())}g',
@@ -1011,28 +1100,67 @@ class _MealTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
-    leading: const CircleAvatar(
-      backgroundColor: Color(0xFFFFF3D6),
-      foregroundColor: Color(0xFF9A6800),
-      child: Icon(Icons.restaurant_rounded),
+    isThreeLine: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+    leading: CircleAvatar(
+      backgroundColor: _mealTypeColor(meal.mealType).withValues(alpha: 0.14),
+      foregroundColor: _mealTypeColor(meal.mealType),
+      child: Icon(_mealTypeIcon(meal.mealType)),
     ),
-    title: Text(meal.recipeName),
-    subtitle: Text('${_one(meal.servings)} × ${meal.servingLabel}'),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
+    title: Row(
       children: [
+        Expanded(
+          child: Text(
+            meal.recipeName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
         Text(
           '${_kcal(meal.total.energyKcal)} kcal',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
         ),
-        PopupMenuButton<String>(
-          onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'edit', child: Text('编辑份数')),
-            PopupMenuItem(value: 'delete', child: Text('删除')),
+      ],
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: _mealTypeColor(meal.mealType).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                meal.mealType.label,
+                style: TextStyle(
+                  color: _mealTypeColor(meal.mealType),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text('${_one(meal.servings)} × ${meal.servingLabel}'),
           ],
         ),
+        const SizedBox(height: 4),
+        Text(
+          '碳水 ${_one(meal.total.carbsG)}g · 蛋白 ${_one(meal.total.proteinG)}g · 脂肪 ${_one(meal.total.fatG)}g',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF65726C)),
+        ),
+      ],
+    ),
+    trailing: PopupMenuButton<String>(
+      onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'edit', child: Text('编辑餐食')),
+        PopupMenuItem(value: 'delete', child: Text('删除')),
       ],
     ),
   );
@@ -1097,11 +1225,13 @@ class _MealEditorState extends State<MealEditor> {
   final _formKey = GlobalKey<FormState>();
   Recipe? _recipe;
   late final TextEditingController _servings;
+  late MealType _mealType;
 
   @override
   void initState() {
     super.initState();
     _recipe = widget.initial == null ? widget.recipes.first : null;
+    _mealType = widget.initial?.mealType ?? _defaultMealType();
     _servings = TextEditingController(
       text: widget.initial == null ? '1' : _one(widget.initial!.servings),
     );
@@ -1162,6 +1292,30 @@ class _MealEditorState extends State<MealEditor> {
                   subtitle: const Text('历史营养快照保持不变'),
                 ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<MealType>(
+                initialValue: _mealType,
+                decoration: const InputDecoration(labelText: '餐次'),
+                items: MealType.values
+                    .map(
+                      (type) => DropdownMenuItem(
+                        value: type,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _mealTypeIcon(type),
+                              size: 18,
+                              color: _mealTypeColor(type),
+                            ),
+                            const SizedBox(width: 9),
+                            Text(type.label),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _mealType = value!),
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _servings,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -1208,6 +1362,7 @@ class _MealEditorState extends State<MealEditor> {
                           initial?.servingLabel ?? recipe!.servingLabel,
                       servings: double.parse(_servings.text),
                       perServing: initial?.perServing ?? recipe!.nutrition,
+                      mealType: _mealType,
                       createdAt: initial?.createdAt ?? DateTime.now(),
                     ),
                   );
@@ -1221,6 +1376,38 @@ class _MealEditorState extends State<MealEditor> {
     );
   }
 }
+
+MealType _defaultMealType() {
+  final hour = DateTime.now().hour;
+  if (hour < 10) return MealType.breakfast;
+  if (hour < 15) return MealType.lunch;
+  if (hour < 21) return MealType.dinner;
+  return MealType.snack;
+}
+
+Map<MealType, double> _mealBreakdown(
+  List<MealEntry> meals,
+  double Function(Nutrition value) select,
+) => {
+  for (final type in MealType.values)
+    type: meals
+        .where((meal) => meal.mealType == type)
+        .fold<double>(0, (sum, meal) => sum + select(meal.total)),
+};
+
+Color _mealTypeColor(MealType type) => switch (type) {
+  MealType.breakfast => const Color(0xFFE9A023),
+  MealType.lunch => const Color(0xFF3787E8),
+  MealType.dinner => const Color(0xFF8B63D9),
+  MealType.snack => const Color(0xFFE66E76),
+};
+
+IconData _mealTypeIcon(MealType type) => switch (type) {
+  MealType.breakfast => Icons.free_breakfast_rounded,
+  MealType.lunch => Icons.lunch_dining_rounded,
+  MealType.dinner => Icons.dinner_dining_rounded,
+  MealType.snack => Icons.cookie_rounded,
+};
 
 class ExerciseEditor extends StatefulWidget {
   const ExerciseEditor({super.key, required this.date, this.initial});

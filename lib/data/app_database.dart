@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -25,7 +26,7 @@ class AppDatabase {
     final path = p.join(root, 'energy_balance.db');
     _database = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
       onUpgrade: _upgrade,
@@ -70,6 +71,8 @@ class AppDatabase {
         carbs REAL NOT NULL,
         protein REAL NOT NULL,
         fat REAL NOT NULL,
+        image BLOB,
+        image_mime TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -86,6 +89,7 @@ class AppDatabase {
         carbs REAL NOT NULL,
         protein REAL NOT NULL,
         fat REAL NOT NULL,
+        meal_type TEXT NOT NULL DEFAULT 'snack',
         created_at TEXT NOT NULL
       )
     ''');
@@ -107,6 +111,13 @@ class AppDatabase {
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) await _createTrainingPlans(db);
     if (oldVersion < 3) await _createBodyMeasurements(db);
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE recipes ADD COLUMN image BLOB');
+      await db.execute('ALTER TABLE recipes ADD COLUMN image_mime TEXT');
+      await db.execute(
+        "ALTER TABLE meals ADD COLUMN meal_type TEXT NOT NULL DEFAULT 'snack'",
+      );
+    }
   }
 
   Future<void> _createTrainingPlans(DatabaseExecutor db) async {
@@ -304,6 +315,8 @@ class AppDatabase {
       'carbs': recipe.nutrition.carbsG,
       'protein': recipe.nutrition.proteinG,
       'fat': recipe.nutrition.fatG,
+      'image': recipe.imageBytes,
+      'image_mime': recipe.imageMimeType,
       'updated_at': now,
     };
     if (recipe.id == null) {
@@ -329,6 +342,8 @@ class AppDatabase {
       proteinG: (row['protein'] as num).toDouble(),
       fatG: (row['fat'] as num).toDouble(),
     ),
+    imageBytes: row['image'] as Uint8List?,
+    imageMimeType: row['image_mime'] as String?,
   );
 
   Future<List<MealEntry>> loadMeals(DateTime date) async {
@@ -366,6 +381,7 @@ class AppDatabase {
     'carbs': meal.perServing.carbsG,
     'protein': meal.perServing.proteinG,
     'fat': meal.perServing.fatG,
+    'meal_type': meal.mealType.name,
     'created_at': meal.createdAt.toIso8601String(),
   };
 
@@ -381,6 +397,10 @@ class AppDatabase {
       carbsG: (row['carbs'] as num).toDouble(),
       proteinG: (row['protein'] as num).toDouble(),
       fatG: (row['fat'] as num).toDouble(),
+    ),
+    mealType: MealType.values.firstWhere(
+      (value) => value.name == row['meal_type'],
+      orElse: () => MealType.snack,
     ),
     createdAt: DateTime.parse(row['created_at'] as String),
   );
@@ -617,7 +637,7 @@ class AppDatabase {
     final trainingPlans = await loadTrainingPlans();
     final bodyMeasurements = await loadBodyMeasurements();
     return {
-      'schemaVersion': 3,
+      'schemaVersion': 4,
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': profile.toJson(),
       'goals': goals.values.map((item) => item.toJson()).toList(),
@@ -724,6 +744,8 @@ class AppDatabase {
       'carbs': recipe.nutrition.carbsG,
       'protein': recipe.nutrition.proteinG,
       'fat': recipe.nutrition.fatG,
+      'image': recipe.imageBytes,
+      'image_mime': recipe.imageMimeType,
       'created_at': stamp,
       'updated_at': stamp,
     };
@@ -768,7 +790,10 @@ class AppDatabase {
 
   void _validateBackup(Map<String, dynamic> data) {
     final schemaVersion = data['schemaVersion'];
-    if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3) {
+    if (schemaVersion != 1 &&
+        schemaVersion != 2 &&
+        schemaVersion != 3 &&
+        schemaVersion != 4) {
       throw const FormatException('不支持的备份版本');
     }
     for (final key in [
@@ -781,11 +806,12 @@ class AppDatabase {
     ]) {
       if (!data.containsKey(key)) throw FormatException('备份缺少字段：$key');
     }
-    if ((schemaVersion == 2 || schemaVersion == 3) &&
+    if ((schemaVersion == 2 || schemaVersion == 3 || schemaVersion == 4) &&
         data['trainingPlans'] is! List) {
       throw const FormatException('备份缺少训练计划数据');
     }
-    if (schemaVersion == 3 && data['bodyMeasurements'] is! List) {
+    if ((schemaVersion == 3 || schemaVersion == 4) &&
+        data['bodyMeasurements'] is! List) {
       throw const FormatException('备份缺少身体测量数据');
     }
   }

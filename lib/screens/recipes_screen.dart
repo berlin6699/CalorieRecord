@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -277,16 +280,31 @@ class _RecipeCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(17, 16, 8, 16),
         child: Row(
           children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3D6),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.restaurant_rounded,
-                color: Color(0xFF9A6800),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                width: 76,
+                height: 88,
+                child: recipe.imageBytes == null
+                    ? const ColoredBox(
+                        color: Color(0xFFFFF3D6),
+                        child: Icon(
+                          Icons.restaurant_rounded,
+                          color: Color(0xFF9A6800),
+                          size: 28,
+                        ),
+                      )
+                    : Image.memory(
+                        recipe.imageBytes!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const ColoredBox(
+                          color: Color(0xFFFFF3D6),
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: Color(0xFF9A6800),
+                          ),
+                        ),
+                      ),
               ),
             ),
             const SizedBox(width: 14),
@@ -360,11 +378,15 @@ class _RecipeEditorState extends State<RecipeEditor> {
   late final TextEditingController _carbs;
   late final TextEditingController _protein;
   late final TextEditingController _fat;
+  Uint8List? _imageBytes;
+  String? _imageMimeType;
 
   @override
   void initState() {
     super.initState();
     final recipe = widget.initial;
+    _imageBytes = recipe?.imageBytes;
+    _imageMimeType = recipe?.imageMimeType;
     _name = TextEditingController(text: recipe?.name ?? '');
     _serving = TextEditingController(text: recipe?.servingLabel ?? '1 份');
     _energy = TextEditingController(
@@ -427,6 +449,84 @@ class _RecipeEditorState extends State<RecipeEditor> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F6F4),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      width: 92,
+                      height: 92,
+                      child: _imageBytes == null
+                          ? const ColoredBox(
+                              color: Color(0xFFFFF3D6),
+                              child: Icon(
+                                Icons.add_photo_alternate_outlined,
+                                color: Color(0xFF9A6800),
+                                size: 30,
+                              ),
+                            )
+                          : Image.memory(
+                              _imageBytes!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const ColoredBox(
+                                color: Color(0xFFFFF3D6),
+                                child: Icon(Icons.broken_image_outlined),
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _imageBytes == null ? '菜谱图片' : '已添加菜谱图片',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        const Text(
+                          '支持 JPG、PNG、WebP，最大 5 MB',
+                          style: TextStyle(
+                            color: Color(0xFF65726C),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _pickImage,
+                              icon: const Icon(
+                                Icons.photo_library_outlined,
+                                size: 17,
+                              ),
+                              label: Text(_imageBytes == null ? '选择图片' : '更换'),
+                            ),
+                            if (_imageBytes != null)
+                              TextButton(
+                                onPressed: () => setState(() {
+                                  _imageBytes = null;
+                                  _imageMimeType = null;
+                                }),
+                                child: const Text('移除'),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
             TextFormField(
               controller: _name,
               decoration: const InputDecoration(labelText: '菜谱名称'),
@@ -483,6 +583,8 @@ class _RecipeEditorState extends State<RecipeEditor> {
                       proteinG: double.parse(_protein.text),
                       fatG: double.parse(_fat.text),
                     ),
+                    imageBytes: _imageBytes,
+                    imageMimeType: _imageMimeType,
                   ),
                 );
               },
@@ -493,6 +595,36 @@ class _RecipeEditorState extends State<RecipeEditor> {
       ),
     ),
   );
+
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    if (result == null || !mounted) return;
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法读取所选图片')));
+      return;
+    }
+    if (bytes.length > 5 * 1024 * 1024) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('图片不能超过 5 MB')));
+      return;
+    }
+    final extension = file.extension?.toLowerCase();
+    setState(() {
+      _imageBytes = bytes;
+      _imageMimeType = switch (extension) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg',
+      };
+    });
+  }
 }
 
 String? _required(String? value) =>

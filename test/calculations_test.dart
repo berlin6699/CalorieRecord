@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:energy_balance/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -76,10 +78,41 @@ void main() {
         servingLabel: '一份',
         servings: 2,
         perServing: const Nutrition(energyKcal: 300, proteinG: 20),
+        mealType: MealType.lunch,
         createdAt: DateTime(2026, 9, 1, 12),
       );
       expect(meal.total.energyKcal, 600);
       expect(meal.total.proteinG, 40);
+      expect(meal.mealType, MealType.lunch);
+    });
+
+    test('legacy meal backups default to snack/other', () {
+      final restored = MealEntry.fromJson({
+        'date': '2026-09-01',
+        'recipeId': 1,
+        'recipeName': '旧餐食',
+        'servingLabel': '一份',
+        'servings': 1,
+        'energyKcal': 300,
+        'carbsG': 20,
+        'proteinG': 10,
+        'fatG': 8,
+        'createdAt': '2026-09-01T12:00:00.000',
+      });
+      expect(restored.mealType, MealType.snack);
+    });
+
+    test('recipe image round-trips through backup JSON', () {
+      final original = Recipe(
+        name: '带图菜谱',
+        servingLabel: '一份',
+        nutrition: const Nutrition(energyKcal: 320),
+        imageBytes: Uint8List.fromList([1, 2, 3, 4]),
+        imageMimeType: 'image/png',
+      );
+      final restored = Recipe.fromJson(original.toJson());
+      expect(restored.imageBytes, [1, 2, 3, 4]);
+      expect(restored.imageMimeType, 'image/png');
     });
   });
 

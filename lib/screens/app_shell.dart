@@ -214,7 +214,7 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'CalorieRecord v1.0.3',
+                        'CalorieRecord v1.0.4',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.45),
                           fontSize: 10,

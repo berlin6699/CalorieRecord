@@ -1,8 +1,21 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 enum Sex { male, female }
 
 enum DayType { cardio, strength, rest }
+
+enum MealType { breakfast, lunch, dinner, snack }
+
+extension MealTypeX on MealType {
+  String get label => switch (this) {
+    MealType.breakfast => '早餐',
+    MealType.lunch => '午餐',
+    MealType.dinner => '晚餐',
+    MealType.snack => '加餐/其他',
+  };
+}
 
 enum TrainingPlanType { cutting, maintaining, bulking, custom }
 
@@ -245,18 +258,24 @@ class Recipe {
     required this.name,
     required this.servingLabel,
     required this.nutrition,
+    this.imageBytes,
+    this.imageMimeType,
   });
 
   final int? id;
   final String name;
   final String servingLabel;
   final Nutrition nutrition;
+  final Uint8List? imageBytes;
+  final String? imageMimeType;
 
   Recipe copyWith({int? id}) => Recipe(
     id: id ?? this.id,
     name: name,
     servingLabel: servingLabel,
     nutrition: nutrition,
+    imageBytes: imageBytes,
+    imageMimeType: imageMimeType,
   );
 
   Map<String, dynamic> toJson() => {
@@ -264,6 +283,8 @@ class Recipe {
     'name': name,
     'servingLabel': servingLabel,
     ...nutrition.toJson(),
+    if (imageBytes != null) 'imageBase64': base64Encode(imageBytes!),
+    if (imageMimeType != null) 'imageMimeType': imageMimeType,
   };
 
   factory Recipe.fromJson(Map<String, dynamic> json) => Recipe(
@@ -271,6 +292,10 @@ class Recipe {
     name: (json['name'] as String).trim(),
     servingLabel: (json['servingLabel'] as String).trim(),
     nutrition: Nutrition.fromJson(json),
+    imageBytes: json['imageBase64'] is String
+        ? base64Decode(json['imageBase64'] as String)
+        : null,
+    imageMimeType: json['imageMimeType'] as String?,
   );
 }
 
@@ -283,6 +308,7 @@ class MealEntry {
     required this.servingLabel,
     required this.servings,
     required this.perServing,
+    required this.mealType,
     required this.createdAt,
   });
 
@@ -293,6 +319,7 @@ class MealEntry {
   final String servingLabel;
   final double servings;
   final Nutrition perServing;
+  final MealType mealType;
   final DateTime createdAt;
 
   Nutrition get total => perServing * servings;
@@ -305,6 +332,7 @@ class MealEntry {
     'servingLabel': servingLabel,
     'servings': servings,
     ...perServing.toJson(),
+    'mealType': mealType.name,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -316,6 +344,10 @@ class MealEntry {
     servingLabel: json['servingLabel'] as String,
     servings: _number(json['servings']),
     perServing: Nutrition.fromJson(json),
+    mealType: MealType.values.firstWhere(
+      (value) => value.name == json['mealType'],
+      orElse: () => MealType.snack,
+    ),
     createdAt: DateTime.parse(json['createdAt'] as String),
   );
 }
