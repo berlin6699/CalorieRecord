@@ -12,7 +12,7 @@
 - 历史趋势：查看所选训练计划内的实际数据与当天目标趋势线。
 - 身体数据：按日期记录 11 项体成分与代谢指标，并分别查看可视化趋势。
 - 三类日目标：有氧日、力量日和休息日可分别设置营养目标。
-- 本地优先：SQLite 离线存储，支持跨 Android / Windows 的 JSON 备份与恢复。
+- 本地优先：SQLite 离线存储，支持跨 Android / Windows 的 ZIP 完整备份与恢复。
 - 响应式界面：手机使用底部导航，Windows 宽屏自动使用侧边导航和多列布局。
 
 预编译版本可从 [GitHub Releases](https://github.com/berlin6699/CalorieRecord/releases) 下载。
@@ -61,4 +61,4 @@ Android 版需要 Flutter SDK、JDK、Android SDK 和 Android Emulator；Windows
 - 导入前可选择覆盖或跳过同名菜谱。
 
 完整备份文件由 App 自动生成，不应手动修改；恢复时会整体替换当前数据。
-v1.0.7 起，完整备份的结构版本为 5，并继续兼容恢复结构版本 1、2、3 和 4。菜谱分类会保留关联，图片会以 Base64 编码一并备份。
+v1.0.8 起，完整备份导出为 ZIP，其中 `backup.json` 保存全部结构化数据，`images/recipes/` 保存菜谱图片原文件。恢复功能继续兼容 v1.0.7 及更早版本导出的 JSON 备份。

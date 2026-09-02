@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'app_database.dart';
+import 'backup_archive.dart';
 import 'models.dart';
 
 class TransferService {
@@ -18,29 +19,47 @@ class TransferService {
   Future<void> exportBackup() async {
     final data = await database.exportAll();
     final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final fileName = 'CalorieRecord_备份_$stamp.json';
-    final payload = const JsonEncoder.withIndent('  ').convert(data);
+    final fileName = 'CalorieRecord_完整备份_$stamp.zip';
+    final payload = BackupArchiveCodec.encode(data);
     if (Platform.isWindows || Platform.isLinux) {
       final outputPath = await FilePicker.platform.saveFile(
         dialogTitle: '导出 CalorieRecord 完整备份',
         fileName: fileName,
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['zip'],
       );
       if (outputPath == null) return;
-      await File(outputPath).writeAsString(payload, flush: true);
+      await File(outputPath).writeAsBytes(payload, flush: true);
       return;
     }
     final directory = await getTemporaryDirectory();
     final file = File(p.join(directory.path, fileName));
-    await file.writeAsString(payload, flush: true);
+    await file.writeAsBytes(payload, flush: true);
     await SharePlus.instance.share(
       ShareParams(
         subject: '能量收支数据备份',
-        text: '能量收支 App 完整数据备份',
-        files: [XFile(file.path, mimeType: 'application/json')],
+        text: '能量收支 App 完整数据与菜谱图片备份',
+        files: [XFile(file.path, mimeType: 'application/zip')],
       ),
     );
+  }
+
+  Future<Map<String, dynamic>?> pickBackupFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip', 'json'],
+      withData: true,
+    );
+    if (result == null) return null;
+    final picked = result.files.single;
+    final bytes =
+        picked.bytes ??
+        (picked.path == null ? null : await File(picked.path!).readAsBytes());
+    if (bytes == null) throw const FormatException('无法读取所选文件');
+
+    final extension = p.extension(picked.name).toLowerCase();
+    if (extension == '.zip') return BackupArchiveCodec.decode(bytes);
+    return _decodeJson(bytes);
   }
 
   Future<Map<String, dynamic>?> pickJson() async {
@@ -55,6 +74,10 @@ class TransferService {
         picked.bytes ??
         (picked.path == null ? null : await File(picked.path!).readAsBytes());
     if (bytes == null) throw const FormatException('无法读取所选文件');
+    return _decodeJson(bytes);
+  }
+
+  Map<String, dynamic> _decodeJson(List<int> bytes) {
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('JSON 顶层必须是对象');

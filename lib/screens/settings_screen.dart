@@ -175,7 +175,7 @@ class SettingsScreen extends ConsumerWidget {
                   ListTile(
                     leading: const _IconTile(icon: Icons.ios_share_rounded),
                     title: const Text('导出完整备份'),
-                    subtitle: const Text('保存或分享版本化 JSON 文件'),
+                    subtitle: const Text('ZIP 包含数据 JSON 和全部菜谱图片'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _export(context, ref),
                   ),
@@ -185,7 +185,7 @@ class SettingsScreen extends ConsumerWidget {
                       icon: Icons.settings_backup_restore,
                     ),
                     title: const Text('从备份恢复'),
-                    subtitle: const Text('校验成功后替换当前全部数据'),
+                    subtitle: const Text('支持新版 ZIP 和旧版 JSON'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _restore(context, ref),
                   ),
@@ -374,7 +374,9 @@ class SettingsScreen extends ConsumerWidget {
                                       icon: Icons.save_alt_rounded,
                                     ),
                                     title: const Text('导出完整备份'),
-                                    subtitle: const Text('保存为版本化 JSON 文件'),
+                                    subtitle: const Text(
+                                      'ZIP 包含数据 JSON 和全部菜谱图片',
+                                    ),
                                     trailing: const Icon(
                                       Icons.chevron_right_rounded,
                                     ),
@@ -390,7 +392,7 @@ class SettingsScreen extends ConsumerWidget {
                                       icon: Icons.settings_backup_restore,
                                     ),
                                     title: const Text('从备份恢复'),
-                                    subtitle: const Text('校验后替换当前全部数据'),
+                                    subtitle: const Text('支持新版 ZIP 和旧版 JSON'),
                                     trailing: const Icon(
                                       Icons.chevron_right_rounded,
                                     ),
@@ -512,7 +514,7 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _restore(BuildContext context, WidgetRef ref) async {
     try {
       final service = TransferService(ref.read(databaseProvider));
-      final data = await service.pickJson();
+      final data = await service.pickBackupFile();
       if (data == null || !context.mounted) return;
       final confirmed = await confirmAction(
         context,
