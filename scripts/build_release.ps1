@@ -34,9 +34,9 @@ try {
     $dist = Join-Path $projectRoot 'dist'
     New-Item -ItemType Directory -Path $dist -Force | Out-Null
     Copy-Item -LiteralPath 'build\app\outputs\flutter-apk\app-release.apk' `
-        -Destination (Join-Path $dist 'CalorieRecord-Android-v1.0.2.apk') -Force
+        -Destination (Join-Path $dist 'CalorieRecord-Android-v1.0.3.apk') -Force
     Compress-Archive -Path 'build\windows\x64\runner\Release\*' `
-        -DestinationPath (Join-Path $dist 'CalorieRecord-Windows-x64-v1.0.2.zip') -Force
+        -DestinationPath (Join-Path $dist 'CalorieRecord-Windows-x64-v1.0.3.zip') -Force
     Write-Host "Release files created in $dist"
 } finally {
     Pop-Location

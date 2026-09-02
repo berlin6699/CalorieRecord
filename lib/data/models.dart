@@ -404,6 +404,75 @@ class TrainingPlan {
   );
 }
 
+class BodyMeasurement {
+  const BodyMeasurement({
+    this.id,
+    required this.date,
+    required this.heightCm,
+    required this.weightKg,
+    required this.bmi,
+    required this.bodyFatPercent,
+    required this.visceralFatLevel,
+    required this.subcutaneousFatPercent,
+    required this.musclePercent,
+    required this.boneMassKg,
+    required this.waterPercent,
+    required this.proteinPercent,
+    required this.bmrKcal,
+    required this.createdAt,
+  });
+
+  final int? id;
+  final DateTime date;
+  final double heightCm;
+  final double weightKg;
+  final double bmi;
+  final double bodyFatPercent;
+  final double visceralFatLevel;
+  final double subcutaneousFatPercent;
+  final double musclePercent;
+  final double boneMassKg;
+  final double waterPercent;
+  final double proteinPercent;
+  final double bmrKcal;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    if (id != null) 'id': id,
+    'date': dateKey(date),
+    'heightCm': heightCm,
+    'weightKg': weightKg,
+    'bmi': bmi,
+    'bodyFatPercent': bodyFatPercent,
+    'visceralFatLevel': visceralFatLevel,
+    'subcutaneousFatPercent': subcutaneousFatPercent,
+    'musclePercent': musclePercent,
+    'boneMassKg': boneMassKg,
+    'waterPercent': waterPercent,
+    'proteinPercent': proteinPercent,
+    'bmrKcal': bmrKcal,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory BodyMeasurement.fromJson(Map<String, dynamic> json) =>
+      BodyMeasurement(
+        id: (json['id'] as num?)?.toInt(),
+        date: DateTime.parse(json['date'] as String),
+        heightCm: _number(json['heightCm']),
+        weightKg: _number(json['weightKg']),
+        bmi: _number(json['bmi']),
+        bodyFatPercent: _number(json['bodyFatPercent']),
+        visceralFatLevel: _number(json['visceralFatLevel']),
+        subcutaneousFatPercent: _number(json['subcutaneousFatPercent']),
+        musclePercent: _number(json['musclePercent']),
+        boneMassKg: _number(json['boneMassKg']),
+        waterPercent: _number(json['waterPercent']),
+        proteinPercent: _number(json['proteinPercent']),
+        bmrKcal: _number(json['bmrKcal']),
+        createdAt: DateTime.parse(json['createdAt'] as String),
+      );
+}
+
 class DailySummary {
   const DailySummary({
     required this.record,

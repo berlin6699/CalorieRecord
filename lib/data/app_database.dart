@@ -25,7 +25,7 @@ class AppDatabase {
     final path = p.join(root, 'energy_balance.db');
     _database = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
       onUpgrade: _upgrade,
@@ -101,10 +101,12 @@ class AppDatabase {
     ''');
     await db.execute('CREATE INDEX idx_exercises_date ON exercises(date)');
     await _createTrainingPlans(db);
+    await _createBodyMeasurements(db);
   }
 
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) await _createTrainingPlans(db);
+    if (oldVersion < 3) await _createBodyMeasurements(db);
   }
 
   Future<void> _createTrainingPlans(DatabaseExecutor db) async {
@@ -122,6 +124,31 @@ class AppDatabase {
     await db.execute(
       'CREATE INDEX idx_training_plans_dates '
       'ON training_plans(start_date, end_date)',
+    );
+  }
+
+  Future<void> _createBodyMeasurements(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE body_measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL UNIQUE,
+        height REAL NOT NULL,
+        weight REAL NOT NULL,
+        bmi REAL NOT NULL,
+        body_fat REAL NOT NULL,
+        visceral_fat REAL NOT NULL,
+        subcutaneous_fat REAL NOT NULL,
+        muscle REAL NOT NULL,
+        bone_mass REAL NOT NULL,
+        water REAL NOT NULL,
+        protein REAL NOT NULL,
+        bmr REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_body_measurements_date ON body_measurements(date)',
     );
   }
 
@@ -464,6 +491,69 @@ class AppDatabase {
     createdAt: DateTime.parse(row['created_at'] as String),
   );
 
+  Future<List<BodyMeasurement>> loadBodyMeasurements() async {
+    final db = await database;
+    final rows = await db.query(
+      'body_measurements',
+      orderBy: 'date DESC, created_at DESC',
+    );
+    return rows.map(_bodyMeasurementFromRow).toList();
+  }
+
+  Future<int> saveBodyMeasurement(BodyMeasurement measurement) async {
+    final db = await database;
+    final row = _bodyMeasurementRow(measurement)..remove('id');
+    if (measurement.id == null) return db.insert('body_measurements', row);
+    await db.update(
+      'body_measurements',
+      row,
+      where: 'id = ?',
+      whereArgs: [measurement.id],
+    );
+    return measurement.id!;
+  }
+
+  Future<void> deleteBodyMeasurement(int id) async {
+    final db = await database;
+    await db.delete('body_measurements', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Map<String, Object?> _bodyMeasurementRow(BodyMeasurement measurement) => {
+    'id': measurement.id,
+    'date': dateKey(measurement.date),
+    'height': measurement.heightCm,
+    'weight': measurement.weightKg,
+    'bmi': measurement.bmi,
+    'body_fat': measurement.bodyFatPercent,
+    'visceral_fat': measurement.visceralFatLevel,
+    'subcutaneous_fat': measurement.subcutaneousFatPercent,
+    'muscle': measurement.musclePercent,
+    'bone_mass': measurement.boneMassKg,
+    'water': measurement.waterPercent,
+    'protein': measurement.proteinPercent,
+    'bmr': measurement.bmrKcal,
+    'created_at': measurement.createdAt.toIso8601String(),
+    'updated_at': DateTime.now().toIso8601String(),
+  };
+
+  BodyMeasurement _bodyMeasurementFromRow(Map<String, Object?> row) =>
+      BodyMeasurement(
+        id: (row['id'] as num).toInt(),
+        date: DateTime.parse(row['date'] as String),
+        heightCm: (row['height'] as num).toDouble(),
+        weightKg: (row['weight'] as num).toDouble(),
+        bmi: (row['bmi'] as num).toDouble(),
+        bodyFatPercent: (row['body_fat'] as num).toDouble(),
+        visceralFatLevel: (row['visceral_fat'] as num).toDouble(),
+        subcutaneousFatPercent: (row['subcutaneous_fat'] as num).toDouble(),
+        musclePercent: (row['muscle'] as num).toDouble(),
+        boneMassKg: (row['bone_mass'] as num).toDouble(),
+        waterPercent: (row['water'] as num).toDouble(),
+        proteinPercent: (row['protein'] as num).toDouble(),
+        bmrKcal: (row['bmr'] as num).toDouble(),
+        createdAt: DateTime.parse(row['created_at'] as String),
+      );
+
   Future<List<DailySummary>> summaries(DateTime from, DateTime to) async {
     final db = await database;
     final dayRows = await db.query(
@@ -525,8 +615,9 @@ class AppDatabase {
       orderBy: 'date, created_at',
     );
     final trainingPlans = await loadTrainingPlans();
+    final bodyMeasurements = await loadBodyMeasurements();
     return {
-      'schemaVersion': 2,
+      'schemaVersion': 3,
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': profile.toJson(),
       'goals': goals.values.map((item) => item.toJson()).toList(),
@@ -538,6 +629,9 @@ class AppDatabase {
           .map((item) => item.toJson())
           .toList(),
       'trainingPlans': trainingPlans.map((item) => item.toJson()).toList(),
+      'bodyMeasurements': bodyMeasurements
+          .map((item) => item.toJson())
+          .toList(),
     };
   }
 
@@ -568,6 +662,14 @@ class AppDatabase {
                 (item) => TrainingPlan.fromJson(item as Map<String, dynamic>),
               )
               .toList();
+    final bodyMeasurements = data['bodyMeasurements'] == null
+        ? <BodyMeasurement>[]
+        : (data['bodyMeasurements'] as List)
+              .map(
+                (item) =>
+                    BodyMeasurement.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
     final db = await database;
     await db.transaction((txn) async {
       for (final table in [
@@ -577,6 +679,7 @@ class AppDatabase {
         'recipes',
         'goals',
         'training_plans',
+        'body_measurements',
       ]) {
         await txn.delete(table);
       }
@@ -605,6 +708,9 @@ class AppDatabase {
       }
       for (final plan in trainingPlans) {
         await txn.insert('training_plans', _trainingPlanRow(plan));
+      }
+      for (final measurement in bodyMeasurements) {
+        await txn.insert('body_measurements', _bodyMeasurementRow(measurement));
       }
     });
   }
@@ -662,7 +768,7 @@ class AppDatabase {
 
   void _validateBackup(Map<String, dynamic> data) {
     final schemaVersion = data['schemaVersion'];
-    if (schemaVersion != 1 && schemaVersion != 2) {
+    if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3) {
       throw const FormatException('不支持的备份版本');
     }
     for (final key in [
@@ -675,8 +781,12 @@ class AppDatabase {
     ]) {
       if (!data.containsKey(key)) throw FormatException('备份缺少字段：$key');
     }
-    if (schemaVersion == 2 && data['trainingPlans'] is! List) {
+    if ((schemaVersion == 2 || schemaVersion == 3) &&
+        data['trainingPlans'] is! List) {
       throw const FormatException('备份缺少训练计划数据');
+    }
+    if (schemaVersion == 3 && data['bodyMeasurements'] is! List) {
+      throw const FormatException('备份缺少身体测量数据');
     }
   }
 }

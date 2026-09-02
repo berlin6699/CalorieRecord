@@ -22,6 +22,7 @@ class AppState {
     required this.recipes,
     required this.trainingPlans,
     required this.selectedTrainingPlanId,
+    required this.bodyMeasurements,
     required this.trends,
   });
 
@@ -34,6 +35,7 @@ class AppState {
   final List<Recipe> recipes;
   final List<TrainingPlan> trainingPlans;
   final int? selectedTrainingPlanId;
+  final List<BodyMeasurement> bodyMeasurements;
   final List<DailySummary> trends;
 
   TrainingPlan? get selectedTrainingPlan {
@@ -62,6 +64,7 @@ class AppState {
     List<Recipe>? recipes,
     List<TrainingPlan>? trainingPlans,
     Object? selectedTrainingPlanId = _keepSelectedPlan,
+    List<BodyMeasurement>? bodyMeasurements,
     List<DailySummary>? trends,
   }) => AppState(
     profile: profile ?? this.profile,
@@ -75,6 +78,7 @@ class AppState {
     selectedTrainingPlanId: identical(selectedTrainingPlanId, _keepSelectedPlan)
         ? this.selectedTrainingPlanId
         : selectedTrainingPlanId as int?,
+    bodyMeasurements: bodyMeasurements ?? this.bodyMeasurements,
     trends: trends ?? this.trends,
   );
 }
@@ -93,6 +97,7 @@ class AppController extends AsyncNotifier<AppState> {
     final exercises = await _database.loadExercises(selectedDate);
     final recipes = await _database.loadRecipes();
     final trainingPlans = await _database.loadTrainingPlans();
+    final bodyMeasurements = await _database.loadBodyMeasurements();
     final selectedPlan = _preferredPlan(trainingPlans);
     final trends = await _summariesForPlan(selectedPlan);
     return AppState(
@@ -105,6 +110,7 @@ class AppController extends AsyncNotifier<AppState> {
       recipes: recipes,
       trainingPlans: trainingPlans,
       selectedTrainingPlanId: selectedPlan?.id,
+      bodyMeasurements: bodyMeasurements,
       trends: trends,
     );
   }
@@ -259,6 +265,32 @@ class AppController extends AsyncNotifier<AppState> {
         trainingPlans: plans,
         selectedTrainingPlanId: selected?.id,
         trends: trends,
+      ),
+    );
+  }
+
+  Future<void> saveBodyMeasurement(BodyMeasurement measurement) async {
+    final current = state.requireValue;
+    for (final existing in current.bodyMeasurements) {
+      if (dateKey(existing.date) == dateKey(measurement.date) &&
+          existing.id != measurement.id) {
+        throw StateError('该日期已有身体记录，请编辑已有记录');
+      }
+    }
+    await _database.saveBodyMeasurement(measurement);
+    state = AsyncData(
+      current.copyWith(
+        bodyMeasurements: await _database.loadBodyMeasurements(),
+      ),
+    );
+  }
+
+  Future<void> deleteBodyMeasurement(int id) async {
+    await _database.deleteBodyMeasurement(id);
+    final current = state.requireValue;
+    state = AsyncData(
+      current.copyWith(
+        bodyMeasurements: await _database.loadBodyMeasurements(),
       ),
     );
   }

@@ -133,4 +133,40 @@ void main() {
       expect(dateKey(restored.endDate!), '2026-09-30');
     });
   });
+
+  group('body measurements', () {
+    test('round-trips every measured field through backup JSON', () {
+      final original = BodyMeasurement(
+        id: 3,
+        date: DateTime(2026, 9, 2),
+        heightCm: 178,
+        weightKg: 73.6,
+        bmi: 23.2,
+        bodyFatPercent: 21,
+        visceralFatLevel: 6,
+        subcutaneousFatPercent: 18.8,
+        musclePercent: 44.8,
+        boneMassKg: 3.9,
+        waterPercent: 58,
+        proteinPercent: 15.6,
+        bmrKcal: 1623.3,
+        createdAt: DateTime(2026, 9, 2, 13),
+      );
+
+      final restored = BodyMeasurement.fromJson(original.toJson());
+      expect(restored.id, 3);
+      expect(dateKey(restored.date), '2026-09-02');
+      expect(restored.heightCm, 178);
+      expect(restored.weightKg, 73.6);
+      expect(restored.bmi, 23.2);
+      expect(restored.bodyFatPercent, 21);
+      expect(restored.visceralFatLevel, 6);
+      expect(restored.subcutaneousFatPercent, 18.8);
+      expect(restored.musclePercent, 44.8);
+      expect(restored.boneMassKg, 3.9);
+      expect(restored.waterPercent, 58);
+      expect(restored.proteinPercent, 15.6);
+      expect(restored.bmrKcal, 1623.3);
+    });
+  });
 }

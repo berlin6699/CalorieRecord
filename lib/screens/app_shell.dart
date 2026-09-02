@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
+import 'body_screen.dart';
 import 'recipes_screen.dart';
 import 'settings_screen.dart';
 import 'today_screen.dart';
@@ -22,6 +23,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     TodayScreen(),
     RecipesScreen(),
     TrendsScreen(),
+    BodyScreen(),
     SettingsScreen(),
   ];
 
@@ -89,6 +91,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                       label: '计划',
                     ),
                     NavigationDestination(
+                      icon: Icon(Icons.monitor_weight_outlined),
+                      selectedIcon: Icon(Icons.monitor_weight_rounded),
+                      label: '身体',
+                    ),
+                    NavigationDestination(
                       icon: Icon(Icons.tune_outlined),
                       selectedIcon: Icon(Icons.tune_rounded),
                       label: '设置',
@@ -135,6 +142,7 @@ class _DesktopSidebar extends StatelessWidget {
     (Icons.space_dashboard_outlined, Icons.space_dashboard_rounded, '今日概览'),
     (Icons.menu_book_outlined, Icons.menu_book_rounded, '我的菜谱'),
     (Icons.flag_outlined, Icons.flag_rounded, '训练计划'),
+    (Icons.monitor_weight_outlined, Icons.monitor_weight_rounded, '身体数据'),
     (Icons.tune_outlined, Icons.tune_rounded, '个人与设置'),
   ];
 
@@ -206,7 +214,7 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'CalorieRecord v1.0.2',
+                        'CalorieRecord v1.0.3',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.45),
                           fontSize: 10,
