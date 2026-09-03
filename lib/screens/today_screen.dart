@@ -89,15 +89,13 @@ class TodayScreen extends ConsumerWidget {
                   icon: Icons.ramen_dining_rounded,
                   title: '还没有餐食记录',
                   message: data.recipes.isEmpty
-                      ? '请先到“菜谱”页添加或导入菜谱'
-                      : '从菜谱中选择一餐，输入实际份数',
-                  action: data.recipes.isEmpty
-                      ? null
-                      : FilledButton.tonalIcon(
-                          onPressed: () => _addMeal(context, ref, data),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('添加餐食'),
-                        ),
+                      ? '可以直接记录临时餐食，不必先创建菜谱'
+                      : '可以选择菜谱，也可以直接记录临时餐食',
+                  action: FilledButton.tonalIcon(
+                    onPressed: () => _addMeal(context, ref, data),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('添加餐食'),
+                  ),
                 )
               else
                 Card(
@@ -284,8 +282,8 @@ class TodayScreen extends ConsumerWidget {
                                 ? _DesktopPanelEmpty(
                                     icon: Icons.ramen_dining_rounded,
                                     message: data.recipes.isEmpty
-                                        ? '请先在菜谱库添加菜谱'
-                                        : '今天还没有餐食记录',
+                                        ? '可直接记录临时餐食'
+                                        : '可选择菜谱或记录临时餐食',
                                   )
                                 : Column(
                                     children: [
@@ -397,11 +395,6 @@ class TodayScreen extends ConsumerWidget {
     WidgetRef ref,
     AppState data,
   ) async {
-    if (data.recipes.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请先在“菜谱”页添加菜谱')));
-      return;
-    }
     final meal = await showAdaptiveEditor<MealEntry>(
       context: context,
       builder: (context) =>
@@ -1164,6 +1157,22 @@ class _MealTile extends StatelessWidget {
               ),
             ),
             Text('${_one(meal.servings)} × ${meal.servingLabel}'),
+            if (meal.recipeId == null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9EEF7),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: const Text(
+                  '临时',
+                  style: TextStyle(
+                    color: Color(0xFF53657C),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 4),
@@ -1250,36 +1259,87 @@ class MealEditor extends StatefulWidget {
   State<MealEditor> createState() => _MealEditorState();
 }
 
+enum _MealInputMode { recipe, temporary }
+
 class _MealEditorState extends State<MealEditor> {
   final _formKey = GlobalKey<FormState>();
   Recipe? _recipe;
   late final TextEditingController _servings;
+  late final TextEditingController _name;
+  late final TextEditingController _servingLabel;
+  late final TextEditingController _energy;
+  late final TextEditingController _carbs;
+  late final TextEditingController _protein;
+  late final TextEditingController _fat;
   late MealType _mealType;
+  late _MealInputMode _inputMode;
 
   @override
   void initState() {
     super.initState();
-    _recipe = widget.initial == null ? widget.recipes.first : null;
-    _mealType = widget.initial?.mealType ?? _defaultMealType();
+    final initial = widget.initial;
+    _recipe = initial == null && widget.recipes.isNotEmpty
+        ? widget.recipes.first
+        : null;
+    _inputMode = initial == null
+        ? (widget.recipes.isEmpty
+              ? _MealInputMode.temporary
+              : _MealInputMode.recipe)
+        : (initial.recipeId == null
+              ? _MealInputMode.temporary
+              : _MealInputMode.recipe);
+    _mealType = initial?.mealType ?? _defaultMealType();
     _servings = TextEditingController(
-      text: widget.initial == null ? '1' : _one(widget.initial!.servings),
+      text: initial == null ? '1' : _one(initial.servings),
+    );
+    _name = TextEditingController(text: initial?.recipeName ?? '');
+    _servingLabel = TextEditingController(text: initial?.servingLabel ?? '一份');
+    _energy = TextEditingController(
+      text: initial == null ? '' : _one(initial.perServing.energyKcal),
+    );
+    _carbs = TextEditingController(
+      text: initial == null ? '0' : _one(initial.perServing.carbsG),
+    );
+    _protein = TextEditingController(
+      text: initial == null ? '0' : _one(initial.perServing.proteinG),
+    );
+    _fat = TextEditingController(
+      text: initial == null ? '0' : _one(initial.perServing.fatG),
     );
   }
 
   @override
   void dispose() {
     _servings.dispose();
+    _name.dispose();
+    _servingLabel.dispose();
+    _energy.dispose();
+    _carbs.dispose();
+    _protein.dispose();
+    _fat.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final editing = widget.initial != null;
-    final name = editing ? widget.initial!.recipeName : _recipe!.name;
-    final perServing = editing
+    final temporary = _inputMode == _MealInputMode.temporary;
+    final name = temporary
+        ? _name.text.trim()
+        : editing
+        ? widget.initial!.recipeName
+        : _recipe?.name ?? '';
+    final perServing = temporary
+        ? _temporaryNutrition
+        : editing
         ? widget.initial!.perServing
-        : _recipe!.nutrition;
+        : _recipe?.nutrition ?? const Nutrition();
     final count = double.tryParse(_servings.text) ?? 0;
+    final servingLabel = temporary
+        ? _servingLabel.text.trim()
+        : editing
+        ? widget.initial!.servingLabel
+        : _recipe?.servingLabel ?? '';
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -1299,7 +1359,28 @@ class _MealEditorState extends State<MealEditor> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 18),
-              if (!editing)
+              if (!editing && widget.recipes.isNotEmpty) ...[
+                SegmentedButton<_MealInputMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _MealInputMode.recipe,
+                      icon: Icon(Icons.menu_book_outlined),
+                      label: Text('从菜谱选择'),
+                    ),
+                    ButtonSegment(
+                      value: _MealInputMode.temporary,
+                      icon: Icon(Icons.edit_note_rounded),
+                      label: Text('临时餐食'),
+                    ),
+                  ],
+                  selected: {_inputMode},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (value) =>
+                      setState(() => _inputMode = value.first),
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (!editing && !temporary)
                 DropdownButtonFormField<Recipe>(
                   initialValue: _recipe,
                   isExpanded: true,
@@ -1313,13 +1394,80 @@ class _MealEditorState extends State<MealEditor> {
                       )
                       .toList(),
                   onChanged: (value) => setState(() => _recipe = value),
+                  validator: (value) => value == null ? '请选择菜谱' : null,
                 )
-              else
+              else if (!temporary)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(name),
                   subtitle: const Text('历史营养快照保持不变'),
+                )
+              else ...[
+                if (!editing && widget.recipes.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F6F5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text('这条记录只计入当天，不会保存到菜谱库。'),
+                  ),
+                if (!editing && widget.recipes.isEmpty)
+                  const SizedBox(height: 12),
+                TextFormField(
+                  controller: _name,
+                  decoration: const InputDecoration(
+                    labelText: '餐食名称',
+                    hintText: '例如：外出聚餐、临时盒饭',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: _requiredMealText,
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _servingLabel,
+                  decoration: const InputDecoration(
+                    labelText: '每份说明',
+                    hintText: '例如：一份、一碗、250 克',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: _requiredMealText,
+                ),
+                const SizedBox(height: 16),
+                Text('每份营养', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                _temporaryNumberField(
+                  controller: _energy,
+                  label: '能量',
+                  suffix: 'kcal',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _temporaryNumberField(
+                        controller: _carbs,
+                        label: '碳水',
+                        suffix: 'g',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _temporaryNumberField(
+                        controller: _protein,
+                        label: '蛋白质',
+                        suffix: 'g',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _temporaryNumberField(
+                  controller: _fat,
+                  label: '脂肪',
+                  suffix: 'g',
+                ),
+              ],
               const SizedBox(height: 12),
               DropdownButtonFormField<MealType>(
                 initialValue: _mealType,
@@ -1352,9 +1500,7 @@ class _MealEditorState extends State<MealEditor> {
                 ),
                 decoration: InputDecoration(
                   labelText: '本次份数',
-                  suffixText: editing
-                      ? widget.initial!.servingLabel
-                      : _recipe!.servingLabel,
+                  suffixText: servingLabel,
                 ),
                 onChanged: (_) => setState(() {}),
                 validator: (value) {
@@ -1376,26 +1522,7 @@ class _MealEditorState extends State<MealEditor> {
               ),
               const SizedBox(height: 22),
               FilledButton(
-                onPressed: () {
-                  if (!_formKey.currentState!.validate()) return;
-                  final recipe = _recipe;
-                  final initial = widget.initial;
-                  Navigator.pop(
-                    context,
-                    MealEntry(
-                      id: initial?.id,
-                      date: widget.date,
-                      recipeId: initial?.recipeId ?? recipe!.id,
-                      recipeName: initial?.recipeName ?? recipe!.name,
-                      servingLabel:
-                          initial?.servingLabel ?? recipe!.servingLabel,
-                      servings: double.parse(_servings.text),
-                      perServing: initial?.perServing ?? recipe!.nutrition,
-                      mealType: _mealType,
-                      createdAt: initial?.createdAt ?? DateTime.now(),
-                    ),
-                  );
-                },
+                onPressed: _submit,
                 child: Text(editing ? '保存修改' : '添加到当天'),
               ),
             ],
@@ -1404,7 +1531,61 @@ class _MealEditorState extends State<MealEditor> {
       ),
     );
   }
+
+  Nutrition get _temporaryNutrition => Nutrition(
+    energyKcal: double.tryParse(_energy.text.trim()) ?? 0,
+    carbsG: double.tryParse(_carbs.text.trim()) ?? 0,
+    proteinG: double.tryParse(_protein.text.trim()) ?? 0,
+    fatG: double.tryParse(_fat.text.trim()) ?? 0,
+  );
+
+  Widget _temporaryNumberField({
+    required TextEditingController controller,
+    required String label,
+    required String suffix,
+  }) => TextFormField(
+    controller: controller,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    decoration: InputDecoration(labelText: label, suffixText: suffix),
+    onChanged: (_) => setState(() {}),
+    validator: (value) {
+      final parsed = double.tryParse(value?.trim() ?? '');
+      if (parsed == null) return '请输入有效数字';
+      if (parsed < 0) return '不能小于 0';
+      return null;
+    },
+  );
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final initial = widget.initial;
+    final temporary = _inputMode == _MealInputMode.temporary;
+    final recipe = _recipe;
+    Navigator.pop(
+      context,
+      MealEntry(
+        id: initial?.id,
+        date: widget.date,
+        recipeId: temporary ? null : initial?.recipeId ?? recipe!.id,
+        recipeName: temporary
+            ? _name.text.trim()
+            : initial?.recipeName ?? recipe!.name,
+        servingLabel: temporary
+            ? _servingLabel.text.trim()
+            : initial?.servingLabel ?? recipe!.servingLabel,
+        servings: double.parse(_servings.text.trim()),
+        perServing: temporary
+            ? _temporaryNutrition
+            : initial?.perServing ?? recipe!.nutrition,
+        mealType: _mealType,
+        createdAt: initial?.createdAt ?? DateTime.now(),
+      ),
+    );
+  }
 }
+
+String? _requiredMealText(String? value) =>
+    value?.trim().isEmpty ?? true ? '不能为空' : null;
 
 MealType _defaultMealType() {
   final hour = DateTime.now().hour;
@@ -1425,10 +1606,9 @@ Map<MealType, double> _mealBreakdown(
 };
 
 Recipe? _recipeForMeal(List<Recipe> recipes, MealEntry meal) {
-  if (meal.recipeId != null) {
-    for (final recipe in recipes) {
-      if (recipe.id == meal.recipeId) return recipe;
-    }
+  if (meal.recipeId == null) return null;
+  for (final recipe in recipes) {
+    if (recipe.id == meal.recipeId) return recipe;
   }
   for (final recipe in recipes) {
     if (recipe.name == meal.recipeName) return recipe;

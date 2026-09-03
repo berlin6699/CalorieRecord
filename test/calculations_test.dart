@@ -102,6 +102,30 @@ void main() {
       expect(restored.mealType, MealType.snack);
     });
 
+    test('temporary meal round-trips without a recipe id', () {
+      final original = MealEntry(
+        date: DateTime(2026, 9, 3),
+        recipeId: null,
+        recipeName: '外出聚餐',
+        servingLabel: '一餐',
+        servings: 1,
+        perServing: const Nutrition(
+          energyKcal: 850,
+          carbsG: 90,
+          proteinG: 40,
+          fatG: 32,
+        ),
+        mealType: MealType.dinner,
+        createdAt: DateTime(2026, 9, 3, 19),
+      );
+
+      final restored = MealEntry.fromJson(original.toJson());
+      expect(restored.recipeId, isNull);
+      expect(restored.recipeName, '外出聚餐');
+      expect(restored.perServing.energyKcal, 850);
+      expect(restored.mealType, MealType.dinner);
+    });
+
     test('recipe image round-trips through backup JSON', () {
       final original = Recipe(
         name: '带图菜谱',
