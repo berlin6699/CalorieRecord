@@ -149,11 +149,16 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 26),
-            const SectionHeader(title: '日类型与营养目标', subtitle: '修改只影响未来新建的日期'),
+            const SectionHeader(
+              title: '日类型与营养目标',
+              subtitle: '放纵日无需目标，可在今日概览中直接选择',
+            ),
             Card(
               child: Column(
                 children: [
-                  for (final type in DayType.values)
+                  for (final type in DayType.values.where(
+                    (type) => type.tracksEnergy,
+                  ))
                     _GoalTile(
                       goal: data.goals[type]!,
                       isDefault: data.profile.defaultDayType == type,
@@ -324,12 +329,14 @@ class SettingsScreen extends ConsumerWidget {
                             const SizedBox(height: 24),
                             const SectionHeader(
                               title: '日类型与营养目标',
-                              subtitle: '修改只影响未来新建的日期',
+                              subtitle: '放纵日无需目标，可在今日概览中直接选择',
                             ),
                             Card(
                               child: Column(
                                 children: [
-                                  for (final type in DayType.values)
+                                  for (final type in DayType.values.where(
+                                    (type) => type.tracksEnergy,
+                                  ))
                                     _GoalTile(
                                       goal: data.goals[type]!,
                                       isDefault:
@@ -649,6 +656,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
           initialValue: _defaultType,
           decoration: const InputDecoration(labelText: '新日期默认类型'),
           items: DayType.values
+              .where((type) => type.tracksEnergy)
               .map(
                 (type) =>
                     DropdownMenuItem(value: type, child: Text(type.label)),
@@ -801,6 +809,7 @@ class _GoalTile extends StatelessWidget {
         DayType.cardio => Icons.directions_run_rounded,
         DayType.strength => Icons.fitness_center_rounded,
         DayType.rest => Icons.self_improvement_rounded,
+        DayType.indulgence => Icons.celebration_rounded,
       },
     ),
     title: Row(

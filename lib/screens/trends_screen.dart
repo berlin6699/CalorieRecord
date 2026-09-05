@@ -822,10 +822,10 @@ class _TrendChart extends StatelessWidget {
 
   double _actual(DailySummary item) => switch (metric) {
     TrendMetric.net => item.netEnergy,
-    TrendMetric.carbs => item.intake.carbsG,
-    TrendMetric.protein => item.intake.proteinG,
-    TrendMetric.fat => item.intake.fatG,
-    TrendMetric.exercise => item.exerciseKcal,
+    TrendMetric.carbs => item.effectiveIntake.carbsG,
+    TrendMetric.protein => item.effectiveIntake.proteinG,
+    TrendMetric.fat => item.effectiveIntake.fatG,
+    TrendMetric.exercise => item.effectiveExerciseKcal,
   };
 
   double? _target(DailySummary item) => switch (metric) {
@@ -1100,9 +1100,6 @@ String _planDates(TrainingPlan plan) {
   return '${formatter.format(plan.startDate)} — $end';
 }
 
-double _attainment(double actual, double target) =>
-    target <= 0 ? 0 : actual / target;
-
 double _averageRatio(
   List<DailySummary> items,
   double Function(DailySummary) actual,
@@ -1111,7 +1108,7 @@ double _averageRatio(
   if (items.isEmpty) return 0;
   return items.fold(
         0.0,
-        (sum, item) => sum + _attainment(actual(item), target(item)),
+        (sum, item) => sum + item.ratio(actual(item), target(item)),
       ) /
       items.length;
 }

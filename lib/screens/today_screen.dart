@@ -60,6 +60,7 @@ class TodayScreen extends ConsumerWidget {
                             DayType.cardio => Icons.directions_run_rounded,
                             DayType.strength => Icons.fitness_center_rounded,
                             DayType.rest => Icons.self_improvement_rounded,
+                            DayType.indulgence => Icons.celebration_rounded,
                           }),
                         ),
                       )
@@ -70,91 +71,102 @@ class TodayScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              _EnergyHero(summary: summary),
-              const SizedBox(height: 18),
-              _NutritionGrid(summary: summary, meals: data.meals),
-              const SizedBox(height: 28),
-              SectionHeader(
-                title: '今日餐食',
-                subtitle:
-                    '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
-                trailing: IconButton.filledTonal(
-                  tooltip: '添加餐食',
-                  onPressed: () => _addMeal(context, ref, data),
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ),
-              if (data.meals.isEmpty)
-                EmptyState(
-                  icon: Icons.ramen_dining_rounded,
-                  title: '还没有餐食记录',
-                  message: data.recipes.isEmpty
-                      ? '可以直接记录临时餐食，不必先创建菜谱'
-                      : '可以选择菜谱，也可以直接记录临时餐食',
-                  action: FilledButton.tonalIcon(
+              if (data.day.type == DayType.indulgence)
+                _IndulgenceDayCard(
+                  hasSavedEntries:
+                      data.meals.isNotEmpty || data.exercises.isNotEmpty,
+                )
+              else ...[
+                _EnergyHero(summary: summary),
+                const SizedBox(height: 18),
+                _NutritionGrid(summary: summary, meals: data.meals),
+                const SizedBox(height: 28),
+                SectionHeader(
+                  title: '今日餐食',
+                  subtitle:
+                      '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
+                  trailing: IconButton.filledTonal(
+                    tooltip: '添加餐食',
                     onPressed: () => _addMeal(context, ref, data),
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('添加餐食'),
                   ),
-                )
-              else
-                Card(
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < data.meals.length; i++) ...[
-                        _MealTile(
-                          meal: data.meals[i],
-                          recipe: _recipeForMeal(data.recipes, data.meals[i]),
-                          onEdit: () => _editMeal(context, ref, data.meals[i]),
-                          onDelete: () =>
-                              _deleteMeal(context, ref, data.meals[i]),
-                        ),
-                        if (i != data.meals.length - 1)
-                          const Divider(height: 1, indent: 70),
+                ),
+                if (data.meals.isEmpty)
+                  EmptyState(
+                    icon: Icons.ramen_dining_rounded,
+                    title: '还没有餐食记录',
+                    message: data.recipes.isEmpty
+                        ? '可以直接记录临时餐食，不必先创建菜谱'
+                        : '可以选择菜谱，也可以直接记录临时餐食',
+                    action: FilledButton.tonalIcon(
+                      onPressed: () => _addMeal(context, ref, data),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('添加餐食'),
+                    ),
+                  )
+                else
+                  Card(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < data.meals.length; i++) ...[
+                          _MealTile(
+                            meal: data.meals[i],
+                            recipe: _recipeForMeal(data.recipes, data.meals[i]),
+                            onEdit: () =>
+                                _editMeal(context, ref, data.meals[i]),
+                            onDelete: () =>
+                                _deleteMeal(context, ref, data.meals[i]),
+                          ),
+                          if (i != data.meals.length - 1)
+                            const Divider(height: 1, indent: 70),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              const SizedBox(height: 28),
-              SectionHeader(
-                title: '今日运动',
-                subtitle:
-                    '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
-                trailing: IconButton.filledTonal(
-                  tooltip: '添加运动',
-                  onPressed: () => _addExercise(context, ref, data),
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ),
-              if (data.exercises.isEmpty)
-                EmptyState(
-                  icon: Icons.directions_run_rounded,
-                  title: '还没有运动记录',
-                  message: '记录运动项目和本次消耗的能量',
-                  action: FilledButton.tonalIcon(
+                const SizedBox(height: 28),
+                SectionHeader(
+                  title: '今日运动',
+                  subtitle:
+                      '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
+                  trailing: IconButton.filledTonal(
+                    tooltip: '添加运动',
                     onPressed: () => _addExercise(context, ref, data),
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('添加运动'),
-                  ),
-                )
-              else
-                Card(
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < data.exercises.length; i++) ...[
-                        _ExerciseTile(
-                          exercise: data.exercises[i],
-                          onEdit: () =>
-                              _editExercise(context, ref, data.exercises[i]),
-                          onDelete: () =>
-                              _deleteExercise(context, ref, data.exercises[i]),
-                        ),
-                        if (i != data.exercises.length - 1)
-                          const Divider(height: 1, indent: 70),
-                      ],
-                    ],
                   ),
                 ),
+                if (data.exercises.isEmpty)
+                  EmptyState(
+                    icon: Icons.directions_run_rounded,
+                    title: '还没有运动记录',
+                    message: '记录运动项目和本次消耗的能量',
+                    action: FilledButton.tonalIcon(
+                      onPressed: () => _addExercise(context, ref, data),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('添加运动'),
+                    ),
+                  )
+                else
+                  Card(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < data.exercises.length; i++) ...[
+                          _ExerciseTile(
+                            exercise: data.exercises[i],
+                            onEdit: () =>
+                                _editExercise(context, ref, data.exercises[i]),
+                            onDelete: () => _deleteExercise(
+                              context,
+                              ref,
+                              data.exercises[i],
+                            ),
+                          ),
+                          if (i != data.exercises.length - 1)
+                            const Divider(height: 1, indent: 70),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -236,6 +248,8 @@ class TodayScreen extends ConsumerWidget {
                                             Icons.fitness_center_rounded,
                                           DayType.rest =>
                                             Icons.self_improvement_rounded,
+                                          DayType.indulgence =>
+                                            Icons.celebration_rounded,
                                         }),
                                       ),
                                     )
@@ -250,117 +264,127 @@ class TodayScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 5, child: _EnergyHero(summary: summary)),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          flex: 4,
-                          child: _DesktopNutritionPanel(
-                            summary: summary,
-                            meals: data.meals,
+                    if (data.day.type == DayType.indulgence)
+                      _IndulgenceDayCard(
+                        hasSavedEntries:
+                            data.meals.isNotEmpty || data.exercises.isNotEmpty,
+                      )
+                    else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: _EnergyHero(summary: summary),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _DesktopRecordsPanel(
-                            icon: Icons.restaurant_rounded,
-                            iconColor: const Color(0xFF9A6800),
-                            iconBackground: const Color(0xFFFFF3D6),
-                            title: '今日餐食',
-                            subtitle:
-                                '${data.meals.length} 条 · ${_kcal(data.intake.energyKcal)} kcal',
-                            actionLabel: '添加餐食',
-                            onAdd: () => _addMeal(context, ref, data),
-                            child: data.meals.isEmpty
-                                ? _DesktopPanelEmpty(
-                                    icon: Icons.ramen_dining_rounded,
-                                    message: data.recipes.isEmpty
-                                        ? '可直接记录临时餐食'
-                                        : '可选择菜谱或记录临时餐食',
-                                  )
-                                : Column(
-                                    children: [
-                                      for (
-                                        var i = 0;
-                                        i < data.meals.length;
-                                        i++
-                                      ) ...[
-                                        _MealTile(
-                                          meal: data.meals[i],
-                                          recipe: _recipeForMeal(
-                                            data.recipes,
-                                            data.meals[i],
+                          const SizedBox(width: 18),
+                          Expanded(
+                            flex: 4,
+                            child: _DesktopNutritionPanel(
+                              summary: summary,
+                              meals: data.meals,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _DesktopRecordsPanel(
+                              icon: Icons.restaurant_rounded,
+                              iconColor: const Color(0xFF9A6800),
+                              iconBackground: const Color(0xFFFFF3D6),
+                              title: '今日餐食',
+                              subtitle:
+                                  '${data.meals.length} 条 · ${_kcal(data.intake.energyKcal)} kcal',
+                              actionLabel: '添加餐食',
+                              onAdd: () => _addMeal(context, ref, data),
+                              child: data.meals.isEmpty
+                                  ? _DesktopPanelEmpty(
+                                      icon: Icons.ramen_dining_rounded,
+                                      message: data.recipes.isEmpty
+                                          ? '可直接记录临时餐食'
+                                          : '可选择菜谱或记录临时餐食',
+                                    )
+                                  : Column(
+                                      children: [
+                                        for (
+                                          var i = 0;
+                                          i < data.meals.length;
+                                          i++
+                                        ) ...[
+                                          _MealTile(
+                                            meal: data.meals[i],
+                                            recipe: _recipeForMeal(
+                                              data.recipes,
+                                              data.meals[i],
+                                            ),
+                                            onEdit: () => _editMeal(
+                                              context,
+                                              ref,
+                                              data.meals[i],
+                                            ),
+                                            onDelete: () => _deleteMeal(
+                                              context,
+                                              ref,
+                                              data.meals[i],
+                                            ),
                                           ),
-                                          onEdit: () => _editMeal(
-                                            context,
-                                            ref,
-                                            data.meals[i],
-                                          ),
-                                          onDelete: () => _deleteMeal(
-                                            context,
-                                            ref,
-                                            data.meals[i],
-                                          ),
-                                        ),
-                                        if (i != data.meals.length - 1)
-                                          const Divider(indent: 68),
+                                          if (i != data.meals.length - 1)
+                                            const Divider(indent: 68),
+                                        ],
                                       ],
-                                    ],
-                                  ),
+                                    ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          child: _DesktopRecordsPanel(
-                            icon: Icons.directions_run_rounded,
-                            iconColor: brandGreen,
-                            iconBackground: const Color(0xFFE7F5EE),
-                            title: '今日运动',
-                            subtitle:
-                                '${data.exercises.length} 条 · ${_kcal(data.exerciseKcal)} kcal',
-                            actionLabel: '添加运动',
-                            onAdd: () => _addExercise(context, ref, data),
-                            child: data.exercises.isEmpty
-                                ? const _DesktopPanelEmpty(
-                                    icon: Icons.directions_run_rounded,
-                                    message: '今天还没有运动记录',
-                                  )
-                                : Column(
-                                    children: [
-                                      for (
-                                        var i = 0;
-                                        i < data.exercises.length;
-                                        i++
-                                      ) ...[
-                                        _ExerciseTile(
-                                          exercise: data.exercises[i],
-                                          onEdit: () => _editExercise(
-                                            context,
-                                            ref,
-                                            data.exercises[i],
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: _DesktopRecordsPanel(
+                              icon: Icons.directions_run_rounded,
+                              iconColor: brandGreen,
+                              iconBackground: const Color(0xFFE7F5EE),
+                              title: '今日运动',
+                              subtitle:
+                                  '${data.exercises.length} 条 · ${_kcal(data.exerciseKcal)} kcal',
+                              actionLabel: '添加运动',
+                              onAdd: () => _addExercise(context, ref, data),
+                              child: data.exercises.isEmpty
+                                  ? const _DesktopPanelEmpty(
+                                      icon: Icons.directions_run_rounded,
+                                      message: '今天还没有运动记录',
+                                    )
+                                  : Column(
+                                      children: [
+                                        for (
+                                          var i = 0;
+                                          i < data.exercises.length;
+                                          i++
+                                        ) ...[
+                                          _ExerciseTile(
+                                            exercise: data.exercises[i],
+                                            onEdit: () => _editExercise(
+                                              context,
+                                              ref,
+                                              data.exercises[i],
+                                            ),
+                                            onDelete: () => _deleteExercise(
+                                              context,
+                                              ref,
+                                              data.exercises[i],
+                                            ),
                                           ),
-                                          onDelete: () => _deleteExercise(
-                                            context,
-                                            ref,
-                                            data.exercises[i],
-                                          ),
-                                        ),
-                                        if (i != data.exercises.length - 1)
-                                          const Divider(indent: 68),
+                                          if (i != data.exercises.length - 1)
+                                            const Divider(indent: 68),
+                                        ],
                                       ],
-                                    ],
-                                  ),
+                                    ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -699,6 +723,101 @@ class _DesktopPanelEmpty extends StatelessWidget {
           Text(message, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
+    ),
+  );
+}
+
+class _IndulgenceDayCard extends StatelessWidget {
+  const _IndulgenceDayCard({required this.hasSavedEntries});
+
+  final bool hasSavedEntries;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(26),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFFFFF5DA), Color(0xFFFFE8B8)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(26),
+      border: Border.all(color: const Color(0x33D58C18)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x18B7791F),
+          blurRadius: 22,
+          offset: Offset(0, 9),
+        ),
+      ],
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Icon(
+            Icons.celebration_rounded,
+            color: Color(0xFFB56C08),
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 17),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '今天是放纵日',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: const Color(0xFF71440B),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 7),
+              const Text(
+                '今天不统计饮食、营养或运动收支，净能量默认按 0 kcal 平衡记录。',
+                style: TextStyle(color: Color(0xFF7A592D), height: 1.45),
+              ),
+              if (hasSavedEntries) ...[
+                const SizedBox(height: 7),
+                const Text(
+                  '此前填写的餐食和运动仍然保留，但在放纵日状态下不参与统计。',
+                  style: TextStyle(
+                    color: Color(0xFF8B641F),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 15),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFB56C08).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: const Text(
+                  '无需记录 · 默认平衡',
+                  style: TextStyle(
+                    color: Color(0xFF9B5A05),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }

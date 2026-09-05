@@ -70,6 +70,40 @@ void main() {
       expect(summary.netEnergy, -200);
     });
 
+    test('indulgence day is always balanced and ignores saved entries', () {
+      final summary = DailySummary(
+        record: DayRecord(
+          date: DateTime(2026, 9, 5),
+          type: DayType.indulgence,
+          baselineKcal: 1700,
+          target: const Nutrition(),
+        ),
+        intake: const Nutrition(
+          energyKcal: 3600,
+          carbsG: 420,
+          proteinG: 95,
+          fatG: 160,
+        ),
+        exerciseKcal: 800,
+      );
+
+      expect(summary.isIndulgence, isTrue);
+      expect(summary.netEnergy, 0);
+      expect(summary.effectiveIntake.energyKcal, 0);
+      expect(summary.effectiveIntake.carbsG, 0);
+      expect(summary.effectiveExerciseKcal, 0);
+      expect(summary.ratio(0, 0), 1);
+    });
+
+    test('default indulgence goal has no intake requirements', () {
+      final goal = defaultGoals()[DayType.indulgence];
+      expect(goal, isNotNull);
+      expect(goal!.target.energyKcal, 0);
+      expect(goal.target.carbsG, 0);
+      expect(DayType.indulgence.label, '放纵日');
+      expect(DayType.indulgence.tracksEnergy, isFalse);
+    });
+
     test('meal keeps its own nutrition snapshot', () {
       final meal = MealEntry(
         date: DateTime(2026, 9, 1),

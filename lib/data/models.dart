@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 enum Sex { male, female }
 
-enum DayType { cardio, strength, rest }
+enum DayType { cardio, strength, rest, indulgence }
 
 enum MealType { breakfast, lunch, dinner, snack }
 
@@ -33,13 +33,17 @@ extension DayTypeX on DayType {
     DayType.cardio => '有氧日',
     DayType.strength => '无氧日',
     DayType.rest => '休息日',
+    DayType.indulgence => '放纵日',
   };
 
   String get shortLabel => switch (this) {
     DayType.cardio => '有氧',
     DayType.strength => '无氧',
     DayType.rest => '休息',
+    DayType.indulgence => '放纵',
   };
+
+  bool get tracksEnergy => this != DayType.indulgence;
 }
 
 String dateKey(DateTime date) =>
@@ -221,6 +225,10 @@ Map<DayType, DayGoal> defaultGoals() => {
   DayType.rest: const DayGoal(
     type: DayType.rest,
     target: Nutrition(energyKcal: 2000, carbsG: 210, proteinG: 150, fatG: 62),
+  ),
+  DayType.indulgence: const DayGoal(
+    type: DayType.indulgence,
+    target: Nutrition(),
   ),
 };
 
@@ -548,11 +556,20 @@ class DailySummary {
   final Nutrition intake;
   final double exerciseKcal;
 
-  double get netEnergy =>
-      intake.energyKcal - record.baselineKcal - exerciseKcal;
+  bool get isIndulgence => record.type == DayType.indulgence;
 
-  double ratio(double actual, double target) =>
-      target <= 0 ? 0 : math.max(0, actual / target);
+  Nutrition get effectiveIntake => isIndulgence ? const Nutrition() : intake;
+
+  double get effectiveExerciseKcal => isIndulgence ? 0 : exerciseKcal;
+
+  double get netEnergy =>
+      isIndulgence ? 0 : intake.energyKcal - record.baselineKcal - exerciseKcal;
+
+  double ratio(double actual, double target) => isIndulgence
+      ? 1
+      : target <= 0
+      ? 0
+      : math.max(0, actual / target);
 }
 
 double _number(dynamic value) {

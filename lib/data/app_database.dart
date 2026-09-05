@@ -266,18 +266,20 @@ class AppDatabase {
   Future<Map<DayType, DayGoal>> loadGoals() async {
     final db = await database;
     final rows = await db.query('goals');
-    return {
-      for (final row in rows)
-        DayType.values.byName(row['type'] as String): DayGoal(
-          type: DayType.values.byName(row['type'] as String),
-          target: Nutrition(
-            energyKcal: (row['energy'] as num).toDouble(),
-            carbsG: (row['carbs'] as num).toDouble(),
-            proteinG: (row['protein'] as num).toDouble(),
-            fatG: (row['fat'] as num).toDouble(),
-          ),
+    final goals = defaultGoals();
+    for (final row in rows) {
+      final type = DayType.values.byName(row['type'] as String);
+      goals[type] = DayGoal(
+        type: type,
+        target: Nutrition(
+          energyKcal: (row['energy'] as num).toDouble(),
+          carbsG: (row['carbs'] as num).toDouble(),
+          proteinG: (row['protein'] as num).toDouble(),
+          fatG: (row['fat'] as num).toDouble(),
         ),
-    };
+      );
+    }
+    return goals;
   }
 
   Future<void> saveGoal(DayGoal goal) async {
@@ -824,6 +826,13 @@ class AppDatabase {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       for (final goal in goals) {
         await txn.insert('goals', _goalRow(goal));
+      }
+      for (final goal in defaultGoals().values) {
+        await txn.insert(
+          'goals',
+          _goalRow(goal),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
       }
       for (final day in days) {
         await txn.insert('day_records', _dayRow(day));
