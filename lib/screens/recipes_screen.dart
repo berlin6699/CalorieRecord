@@ -3,11 +3,14 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../core/app_theme.dart';
 import '../data/models.dart';
 import '../data/transfer_service.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
+import 'today_screen.dart';
 
 class RecipesScreen extends ConsumerStatefulWidget {
   const RecipesScreen({super.key});
@@ -20,7 +23,14 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
   static const _allCategories = -2;
   static const _uncategorized = -1;
   String _query = '';
+  final _searchController = TextEditingController();
   int _categoryFilter = _allCategories;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +77,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
           if (desktop)
             DesktopPageHeader(
               title: '菜谱库',
-              subtitle: '共 ${data.recipes.length} 份菜谱 · 集中维护每份餐食的营养数据',
+              subtitle: '收藏常吃的味道，让每一餐记录得更轻松。',
               actions: [
                 OutlinedButton.icon(
                   onPressed: () => _manageCategories(context),
@@ -104,9 +114,23 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                         SizedBox(
                           width: desktop ? 460 : double.infinity,
                           child: TextField(
-                            decoration: const InputDecoration(
+                            controller: _searchController,
+                            decoration: InputDecoration(
                               hintText: '按名称搜索菜谱',
-                              prefixIcon: Icon(Icons.search_rounded),
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _query.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: '清空搜索',
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        size: 18,
+                                      ),
+                                      onPressed: () => setState(() {
+                                        _searchController.clear();
+                                        _query = '';
+                                      }),
+                                    ),
                             ),
                             onChanged: (value) =>
                                 setState(() => _query = value.trim()),
@@ -114,7 +138,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                         ),
                         const SizedBox(height: 13),
                         SizedBox(
-                          height: 36,
+                          height: 44,
                           child: ListView(
                             scrollDirection: Axis.horizontal,
                             children: [
@@ -172,7 +196,14 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                                         icon: const Icon(Icons.add_rounded),
                                         label: const Text('新建第一份菜谱'),
                                       )
-                                    : null,
+                                    : TextButton(
+                                        onPressed: () => setState(() {
+                                          _searchController.clear();
+                                          _query = '';
+                                          _categoryFilter = _allCategories;
+                                        }),
+                                        child: const Text('清除筛选'),
+                                      ),
                               ),
                             ],
                           )
@@ -188,14 +219,17 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                                   ),
                                   gridDelegate:
                                       const SliverGridDelegateWithMaxCrossAxisExtent(
-                                        maxCrossAxisExtent: 520,
-                                        mainAxisExtent: 140,
+                                        maxCrossAxisExtent: 440,
+                                        mainAxisExtent: 336,
                                         crossAxisSpacing: 14,
                                         mainAxisSpacing: 14,
                                       ),
                                   itemCount: filtered.length,
                                   itemBuilder: (context, index) => _RecipeCard(
+                                    gallery: true,
                                     recipe: filtered[index],
+                                    onRecord: () =>
+                                        _recordMeal(context, filtered[index]),
                                     onEdit: () => _editRecipe(
                                       context,
                                       initial: filtered[index],
@@ -217,6 +251,8 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) => _RecipeCard(
                                   recipe: filtered[index],
+                                  onRecord: () =>
+                                      _recordMeal(context, filtered[index]),
                                   onEdit: () => _editRecipe(
                                     context,
                                     initial: filtered[index],
@@ -256,6 +292,46 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('保存失败：已有同名菜谱或数据不合法')));
+      }
+    }
+  }
+
+  Future<void> _recordMeal(BuildContext context, Recipe recipe) async {
+    final data = ref.read(appControllerProvider).requireValue;
+    if (data.day.type == DayType.indulgence) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${DateFormat('M月d日').format(data.selectedDate)} 是放纵日，无需记录；可在概览中切换日类型',
+          ),
+        ),
+      );
+      return;
+    }
+    final meal = await showAdaptiveEditor<MealEntry>(
+      context: context,
+      builder: (_) => MealEditor(
+        date: data.selectedDate,
+        recipes: data.recipes,
+        initialRecipe: recipe,
+      ),
+    );
+    if (meal == null) return;
+    try {
+      await ref.read(appControllerProvider.notifier).saveMeal(meal);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '已记录到 ${DateFormat('M月d日').format(meal.date)} · ${meal.mealType.label}',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('记录失败，请重试')));
       }
     }
   }
@@ -336,102 +412,158 @@ class _RecipeCard extends StatelessWidget {
     required this.recipe,
     required this.onEdit,
     required this.onDelete,
+    required this.onRecord,
+    this.gallery = false,
   });
-
   final Recipe recipe;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onRecord;
+  final bool gallery;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: onEdit,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(17, 16, 8, 16),
-        child: Row(
+  Widget build(BuildContext context) {
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          recipe.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '${recipe.categoryName ?? '未分类'} · ${recipe.servingLabel}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: mutedColor, fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 4,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: SizedBox(
-                width: 76,
-                height: 88,
-                child: recipe.imageBytes == null
-                    ? const ColoredBox(
-                        color: Color(0xFFFFF3D6),
-                        child: Icon(
-                          Icons.restaurant_rounded,
-                          color: Color(0xFF9A6800),
-                          size: 28,
-                        ),
-                      )
-                    : Image.memory(
-                        recipe.imageBytes!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const ColoredBox(
-                          color: Color(0xFFFFF3D6),
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: Color(0xFF9A6800),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    recipe.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${recipe.categoryName ?? '未分类'} · 每份 ${recipe.servingLabel} · ${_number(recipe.nutrition.energyKcal)} kcal',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 7),
-                  Wrap(
-                    spacing: 10,
-                    children: [
-                      _Macro(label: '碳', value: recipe.nutrition.carbsG),
-                      _Macro(label: '蛋白', value: recipe.nutrition.proteinG),
-                      _Macro(label: '脂', value: recipe.nutrition.fatG),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'edit', child: Text('编辑')),
-                PopupMenuItem(value: 'delete', child: Text('删除')),
-              ],
-            ),
+            _Macro(label: '碳水', value: recipe.nutrition.carbsG),
+            _Macro(label: '蛋白', value: recipe.nutrition.proteinG),
+            _Macro(label: '脂肪', value: recipe.nutrition.fatG),
           ],
         ),
+      ],
+    );
+    final footer = Row(
+      children: [
+        Text(
+          _number(recipe.nutrition.energyKcal),
+          style: const TextStyle(
+            fontSize: 19,
+            color: deepGreen,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const Text(' kcal', style: TextStyle(fontSize: 11, color: mutedColor)),
+        const Spacer(),
+        TextButton.icon(
+          onPressed: onRecord,
+          icon: const Icon(Icons.add_rounded, size: 17),
+          label: const Text('记录这餐'),
+        ),
+        PopupMenuButton<String>(
+          tooltip: '菜谱操作',
+          onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'edit', child: Text('编辑菜谱')),
+            PopupMenuItem(value: 'delete', child: Text('删除菜谱')),
+          ],
+        ),
+      ],
+    );
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onEdit,
+        child: gallery
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 138,
+                    child: recipe.imageBytes == null
+                        ? const ColoredBox(
+                            color: Color(0xFFEEF0E4),
+                            child: Center(
+                              child: Icon(
+                                Icons.restaurant_rounded,
+                                size: 46,
+                                color: Color(0xFF9BA57F),
+                              ),
+                            ),
+                          )
+                        : Image.memory(
+                            recipe.imageBytes!,
+                            fit: BoxFit.cover,
+                            cacheWidth: 800,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, _, _) => const ColoredBox(
+                              color: Color(0xFFEEF0E4),
+                              child: Icon(
+                                Icons.restaurant_rounded,
+                                color: mutedColor,
+                              ),
+                            ),
+                          ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                      child: info,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 4,
+                      bottom: 4,
+                    ),
+                    child: footer,
+                  ),
+                ],
+              )
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 4, 4),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        RecipeThumbnail(bytes: recipe.imageBytes, size: 82),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: info,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    footer,
+                  ],
+                ),
+              ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Macro extends StatelessWidget {
   const _Macro({required this.label, required this.value});
   final String label;
   final double value;
-
   @override
   Widget build(BuildContext context) => Text(
     '$label ${_number(value)}g',
-    style: const TextStyle(
-      color: Color(0xFF6A766F),
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-    ),
+    style: const TextStyle(color: mutedColor, fontSize: 11),
   );
 }
 

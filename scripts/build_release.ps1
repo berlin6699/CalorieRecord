@@ -32,11 +32,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Windows release build failed' }
 
     $dist = Join-Path $projectRoot 'dist'
+    $versionLine = Get-Content -LiteralPath (Join-Path $projectRoot 'pubspec.yaml') -Encoding UTF8 | Where-Object { $_ -match '^version:\s*' } | Select-Object -First 1
+    if ($versionLine -notmatch '^version:\s*([0-9]+\.[0-9]+\.[0-9]+)') { throw 'Cannot read app version from pubspec.yaml' }
+    $releaseVersion = $Matches[1]
     New-Item -ItemType Directory -Path $dist -Force | Out-Null
     Copy-Item -LiteralPath 'build\app\outputs\flutter-apk\app-release.apk' `
-        -Destination (Join-Path $dist 'CalorieRecord-Android-v1.0.10.apk') -Force
+        -Destination (Join-Path $dist "CalorieRecord-Android-v$releaseVersion.apk") -Force
     Compress-Archive -Path 'build\windows\x64\runner\Release\*' `
-        -DestinationPath (Join-Path $dist 'CalorieRecord-Windows-x64-v1.0.10.zip') -Force
+        -DestinationPath (Join-Path $dist "CalorieRecord-Windows-x64-v$releaseVersion.zip") -Force
+    & (Join-Path $PSScriptRoot 'build_windows_installer.ps1') -SkipFlutterBuild
+    if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed' }
     Write-Host "Release files created in $dist"
 } finally {
     Pop-Location

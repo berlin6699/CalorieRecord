@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -35,6 +36,9 @@ class EnergyBalanceApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'CalorieRecord · 能量收支',
     debugShowCheckedModeBanner: false,
+    locale: const Locale('zh', 'CN'),
+    supportedLocales: const [Locale('zh', 'CN')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: buildTheme(),
     home: const AppShell(),
   );

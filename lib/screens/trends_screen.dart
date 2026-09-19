@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_theme.dart';
+import '../core/chart_dates.dart';
 import '../data/models.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
@@ -123,10 +124,7 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
               const SizedBox(height: 28),
               _trendSection(items),
               const SizedBox(height: 26),
-              const SectionHeader(
-                title: '营养达标概览',
-                subtitle: '按当前训练计划内有记录的日期计算',
-              ),
+              const SectionHeader(title: '营养达标概览', subtitle: '仅统计餐食、运动记录日和放纵日'),
               _NutritionOverview(items: items),
             ],
           ],
@@ -214,7 +212,8 @@ class _TrendsScreenState extends ConsumerState<TrendsScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Row(
+                    AdaptiveColumns(
+                      breakpoint: 960,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(child: _trendSection(items)),
@@ -840,11 +839,18 @@ class _TrendChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final actual = [
       for (var i = 0; i < items.length; i++)
-        FlSpot(i.toDouble(), _actual(items[i])),
+        FlSpot(
+          chartDayOffset(items[i].record.date, items.first.record.date),
+          _actual(items[i]),
+        ),
     ];
     final targets = [
       for (var i = 0; i < items.length; i++)
-        if (_target(items[i]) != null) FlSpot(i.toDouble(), _target(items[i])!),
+        if (_target(items[i]) != null)
+          FlSpot(
+            chartDayOffset(items[i].record.date, items.first.record.date),
+            _target(items[i])!,
+          ),
     ];
     final allValues = [...actual.map((x) => x.y), ...targets.map((x) => x.y)];
     var minY = allValues.reduce(math.min);
@@ -885,7 +891,7 @@ class _TrendChart extends StatelessWidget {
               child: LineChart(
                 LineChartData(
                   minX: 0,
-                  maxX: math.max(1, items.length - 1).toDouble(),
+                  maxX: math.max(1, actual.last.x).toDouble(),
                   minY: minY,
                   maxY: maxY,
                   borderData: FlBorderData(show: false),
@@ -916,21 +922,20 @@ class _TrendChart extends StatelessWidget {
                         showTitles: true,
                         reservedSize: 32,
                         interval: math
-                            .max(1, (items.length / 4).floor())
+                            .max(1, (actual.last.x / 4).ceil())
                             .toDouble(),
                         getTitlesWidget: (value, meta) {
-                          if (value < 0 || value > items.length - 1) {
+                          if (value < 0 ||
+                              value > actual.last.x ||
+                              value != value.roundToDouble()) {
                             return const SizedBox.shrink();
                           }
-                          final index = value.round().clamp(
-                            0,
-                            items.length - 1,
-                          );
                           return Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              DateFormat('M/d')
-                                  .format(items[index].record.date),
+                              DateFormat('M/d').format(
+                                chartDateAt(items.first.record.date, value),
+                              ),
                               style: const TextStyle(fontSize: 10),
                             ),
                           );
@@ -940,10 +945,12 @@ class _TrendChart extends StatelessWidget {
                   ),
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
                       getTooltipItems: (spots) => spots
                           .map(
                             (spot) => LineTooltipItem(
-                              '${spot.y.toStringAsFixed(spot.y.abs() < 100 ? 1 : 0)} ${metric.unit}',
+                              '${DateFormat('M/d').format(chartDateAt(items.first.record.date, spot.x))} · ${targets.isNotEmpty && spot.barIndex == 0 ? (metric == TrendMetric.net ? '平衡线' : '目标') : '实际'}\n${spot.y.toStringAsFixed(spot.y.abs() < 100 ? 1 : 0)} ${metric.unit}',
                               const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -966,7 +973,7 @@ class _TrendChart extends StatelessWidget {
                       spots: actual,
                       color: brandGreen,
                       barWidth: 3,
-                      isCurved: items.length > 2,
+                      isCurved: false,
                       curveSmoothness: 0.25,
                       belowBarData: BarAreaData(
                         show: true,
@@ -1046,10 +1053,10 @@ class _AttainmentRow extends StatelessWidget {
         SizedBox(width: 56, child: Text(label)),
         Expanded(
           child: LinearProgressIndicator(
-            value: value.clamp(0, 1.25) / 1.25,
+            value: value.clamp(0, 1),
             minHeight: 9,
             borderRadius: BorderRadius.circular(99),
-            color: value > 1.1 ? Theme.of(context).colorScheme.error : color,
+            color: color,
             backgroundColor: color.withValues(alpha: 0.12),
           ),
         ),

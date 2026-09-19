@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_theme.dart';
+import '../core/chart_dates.dart';
 import '../data/models.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
@@ -159,7 +160,8 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
                       children: [
                         _LatestMeasurementCard(measurement: measurements.first),
                         const SizedBox(height: 24),
-                        Row(
+                        AdaptiveColumns(
+                          breakpoint: 1050,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(child: _trendSection(measurements)),
@@ -244,6 +246,14 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
     AppState data, [
     BodyMeasurement? initial,
   ]) async {
+    if (initial == null) {
+      for (final existing in data.bodyMeasurements) {
+        if (dateKey(existing.date) == dateKey(DateTime.now())) {
+          initial = existing;
+          break;
+        }
+      }
+    }
     final measurement = await showAdaptiveEditor<BodyMeasurement>(
       context: context,
       desktopWidth: 720,
@@ -453,7 +463,10 @@ class _BodyTrendChart extends StatelessWidget {
     final ordered = measurements.reversed.toList();
     final spots = [
       for (var i = 0; i < ordered.length; i++)
-        FlSpot(i.toDouble(), metric.valueOf(ordered[i])),
+        FlSpot(
+          chartDayOffset(ordered[i].date, ordered.first.date),
+          metric.valueOf(ordered[i]),
+        ),
     ];
     final values = spots.map((spot) => spot.y);
     final rawMin = values.reduce(math.min);
@@ -472,7 +485,7 @@ class _BodyTrendChart extends StatelessWidget {
           child: LineChart(
             LineChartData(
               minX: 0,
-              maxX: math.max(1, ordered.length - 1).toDouble(),
+              maxX: math.max(1, spots.last.x).toDouble(),
               minY: minY,
               maxY: maxY,
               borderData: FlBorderData(show: false),
@@ -502,18 +515,18 @@ class _BodyTrendChart extends StatelessWidget {
                   sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 34,
-                    interval: math
-                        .max(1, (ordered.length / 4).floor())
-                        .toDouble(),
+                    interval: math.max(1, (spots.last.x / 4).ceil()).toDouble(),
                     getTitlesWidget: (value, meta) {
-                      if (value < 0 || value > ordered.length - 1) {
+                      if (value < 0 ||
+                          value > spots.last.x ||
+                          value != value.roundToDouble()) {
                         return const SizedBox.shrink();
                       }
-                      final index = value.round().clamp(0, ordered.length - 1);
                       return Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          DateFormat('M/d').format(ordered[index].date),
+                          DateFormat('M/d')
+                              .format(chartDateAt(ordered.first.date, value)),
                           style: const TextStyle(fontSize: 10),
                         ),
                       );
@@ -523,10 +536,12 @@ class _BodyTrendChart extends StatelessWidget {
               ),
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
                   getTooltipItems: (touched) => touched
                       .map(
                         (spot) => LineTooltipItem(
-                          '${_trim(spot.y)}${metric.unit.isEmpty ? '' : ' ${metric.unit}'}',
+                          '${DateFormat('M/d').format(chartDateAt(ordered.first.date, spot.x))}\n${_trim(spot.y)}${metric.unit.isEmpty ? '' : ' ${metric.unit}'}',
                           const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -541,7 +556,7 @@ class _BodyTrendChart extends StatelessWidget {
                   spots: spots,
                   color: brandGreen,
                   barWidth: 3,
-                  isCurved: spots.length > 2,
+                  isCurved: false,
                   curveSmoothness: 0.24,
                   dotData: const FlDotData(show: true),
                   belowBarData: BarAreaData(

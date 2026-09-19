@@ -1,11 +1,12 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 
 bool useDesktopLayout(BuildContext context) =>
-    Platform.isWindows && MediaQuery.sizeOf(context).width >= 800;
+    Theme.of(context).platform == TargetPlatform.windows &&
+    MediaQuery.sizeOf(context).width >= 800;
 
 class DesktopPageHeader extends StatelessWidget {
   const DesktopPageHeader({
@@ -21,30 +22,36 @@ class DesktopPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 88,
-    padding: const EdgeInsets.symmetric(horizontal: 30),
+    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(bottom: BorderSide(color: Color(0x14708078))),
     ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 5),
+            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        );
+        final buttons = Wrap(spacing: 8, runSpacing: 8, children: actions);
+        if (constraints.maxWidth < 900 && actions.length > 1) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 3),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
-        for (var index = 0; index < actions.length; index++) ...[
-          if (index > 0) const SizedBox(width: 10),
-          actions[index],
-        ],
-      ],
+            children: [heading, const SizedBox(height: 14), buttons],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: 16),
+            buttons,
+          ],
+        );
+      },
     ),
   );
 }
@@ -65,7 +72,23 @@ Future<T?> showAdaptiveEditor<T>({
             maxWidth: desktopWidth,
             maxHeight: MediaQuery.sizeOf(dialogContext).height - 64,
           ),
-          child: builder(dialogContext),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 32),
+                child: builder(dialogContext),
+              ),
+              Positioned(
+                top: 4,
+                right: 6,
+                child: IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.maybePop(dialogContext),
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -192,10 +215,108 @@ class NumberField extends StatelessWidget {
     decoration: InputDecoration(labelText: label, suffixText: suffix),
     validator: (value) {
       final parsed = double.tryParse(value?.trim() ?? '');
-      if (parsed == null) return '请输入有效数字';
+      if (parsed == null || !parsed.isFinite) return '请输入有效数字';
+      if (!decimal && parsed != parsed.roundToDouble()) return '请输入整数';
       if (parsed < 0) return '不能小于 0';
       return null;
     },
+  );
+}
+
+/// Stack multi-column desktop sections when their own available width is small.
+class AdaptiveColumns extends StatelessWidget {
+  const AdaptiveColumns({
+    super.key,
+    required this.children,
+    this.breakpoint = 940,
+    this.crossAxisAlignment = CrossAxisAlignment.start,
+  });
+  final List<Widget> children;
+  final double breakpoint;
+  final CrossAxisAlignment crossAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth >= breakpoint) {
+        return Row(crossAxisAlignment: crossAxisAlignment, children: children);
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final child in children)
+            if (child is Flexible)
+              child.child
+            else if (child is SizedBox && child.width != null)
+              if (child.child != null)
+                child.child!
+              else
+                SizedBox(height: child.width)
+            else
+              child,
+        ],
+      );
+    },
+  );
+}
+
+class RecipeThumbnail extends StatelessWidget {
+  const RecipeThumbnail({
+    super.key,
+    this.bytes,
+    this.size = 56,
+    this.radius = 14,
+  });
+  final Uint8List? bytes;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      color: const Color(0xFFEEF0E4),
+      child: Center(
+        child: Icon(
+          Icons.restaurant_rounded,
+          size: size * .34,
+          color: const Color(0xFF8B9870),
+        ),
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: bytes == null
+            ? fallback
+            : Image.memory(
+                bytes!,
+                fit: BoxFit.cover,
+                cacheWidth: (size * MediaQuery.devicePixelRatioOf(context))
+                    .round()
+                    .clamp(1, 1000),
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => fallback,
+              ),
+      ),
+    );
+  }
+}
+
+class EditorHeading extends StatelessWidget {
+  const EditorHeading({super.key, required this.title, required this.subtitle});
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(title, style: Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height: 6),
+      Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+    ],
   );
 }
 

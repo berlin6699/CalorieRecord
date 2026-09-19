@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/app_theme.dart';
+import '../core/app_version.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
 import 'body_screen.dart';
@@ -113,7 +115,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                   Expanded(
                     child: ColoredBox(
-                      color: const Color(0xFFF2F5F3),
+                      color: canvasColor,
                       child: IndexedStack(index: _index, children: _pages),
                     ),
                   ),
@@ -148,10 +150,10 @@ class _DesktopSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 248,
+    width: 220,
     decoration: const BoxDecoration(
       gradient: LinearGradient(
-        colors: [Color(0xFF123D30), Color(0xFF0D3026)],
+        colors: [Color(0xFF203B32), Color(0xFF192E28)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -165,7 +167,7 @@ class _DesktopSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
             child: Text(
-              '工作台',
+              '日常记录',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.42),
                 fontSize: 11,
@@ -214,7 +216,7 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'CalorieRecord v1.0.7',
+                        'CalorieRecord v$appVersion',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.45),
                           fontSize: 10,
@@ -237,7 +239,7 @@ class _DesktopBrand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 24, 18, 32),
+    padding: const EdgeInsets.fromLTRB(18, 28, 14, 36),
     child: Row(
       children: [
         Container(
@@ -245,20 +247,20 @@ class _DesktopBrand extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF3DDC97), Color(0xFF22A06B)],
+              colors: [Color(0xFFD5E7AA), Color(0xFFB6D398)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(14),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x553DDC97),
-                blurRadius: 18,
+                color: Color(0x153DDC97),
+                blurRadius: 12,
                 offset: Offset(0, 6),
               ),
             ],
           ),
-          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
+          child: const Icon(Icons.bolt_rounded, color: deepGreen, size: 28),
         ),
         const SizedBox(width: 12),
         const Expanded(
@@ -269,13 +271,13 @@ class _DesktopBrand extends StatelessWidget {
                 'CalorieRecord',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               SizedBox(height: 2),
               Text(
-                '能量管理工作台',
+                '让每一天，有迹可循',
                 style: TextStyle(color: Color(0xFF8DB7A7), fontSize: 11),
               ),
             ],
@@ -327,7 +329,7 @@ class _DesktopNavItem extends StatelessWidget {
                 icon,
                 size: 21,
                 color: selected
-                    ? const Color(0xFF68E0AE)
+                    ? const Color(0xFFD5E7AA)
                     : Colors.white.withValues(alpha: 0.62),
               ),
               const SizedBox(width: 13),
@@ -345,7 +347,7 @@ class _DesktopNavItem extends StatelessWidget {
               if (selected)
                 const DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Color(0xFF68E0AE),
+                    color: Color(0xFFD5E7AA),
                     shape: BoxShape.circle,
                   ),
                   child: SizedBox(width: 6, height: 6),

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/app_theme.dart';
+import '../core/app_version.dart';
 import '../data/models.dart';
+import '../data/storage_service.dart';
 import '../data/transfer_service.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
@@ -177,6 +179,10 @@ class SettingsScreen extends ConsumerWidget {
             Card(
               child: Column(
                 children: [
+                  if (Theme.of(context).platform == TargetPlatform.windows) ...[
+                    const _StorageLocationTile(),
+                    const Divider(indent: 72, height: 1),
+                  ],
                   ListTile(
                     leading: const _IconTile(icon: Icons.ios_share_rounded),
                     title: const Text('导出完整备份'),
@@ -231,7 +237,7 @@ class SettingsScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
                 children: [
-                  Row(
+                  AdaptiveColumns(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
@@ -372,6 +378,11 @@ class SettingsScreen extends ConsumerWidget {
                             Card(
                               child: Column(
                                 children: [
+                                  if (Theme.of(context).platform ==
+                                      TargetPlatform.windows) ...[
+                                    const _StorageLocationTile(),
+                                    const Divider(indent: 72),
+                                  ],
                                   ListTile(
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 18,
@@ -435,7 +446,7 @@ class SettingsScreen extends ConsumerWidget {
                                       icon: Icons.storage_outlined,
                                       title: '当前版本',
                                       message:
-                                          'CalorieRecord v1.0.7 · Windows x64',
+                                          'CalorieRecord v$appVersion · Windows x64',
                                       color: Theme.of(context)
                                           .colorScheme
                                           .primary,
@@ -507,6 +518,11 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (saved != null) {
       await ref.read(appControllerProvider.notifier).saveGoal(saved);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('目标已保存：今天相同日类型的目标同步更新，以前的记录保持不变')),
+        );
+      }
     }
   }
 
@@ -539,6 +555,85 @@ class SettingsScreen extends ConsumerWidget {
       }
     } catch (error) {
       if (context.mounted) _showError(context, error);
+    }
+  }
+}
+
+class _StorageLocationTile extends ConsumerStatefulWidget {
+  const _StorageLocationTile();
+
+  @override
+  ConsumerState<_StorageLocationTile> createState() =>
+      _StorageLocationTileState();
+}
+
+class _StorageLocationTileState extends ConsumerState<_StorageLocationTile> {
+  late Future<String> _location;
+  bool _moving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  void _refresh() {
+    _location = ref.read(databaseProvider).storageDirectory;
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+    future: _location,
+    builder: (context, snapshot) {
+      final path = snapshot.data;
+      return ListTile(
+        contentPadding: useDesktopLayout(context)
+            ? const EdgeInsets.symmetric(horizontal: 18, vertical: 7)
+            : null,
+        leading: const _IconTile(icon: Icons.folder_open_rounded),
+        title: const Text('数据存储位置'),
+        subtitle: Text(
+          path ?? (snapshot.hasError ? '无法读取当前目录' : '正在读取…'),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: _moving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.chevron_right_rounded),
+        onTap: _moving ? null : () => _changeLocation(path),
+      );
+    },
+  );
+
+  Future<void> _changeLocation(String? currentPath) async {
+    try {
+      final service = StorageService(ref.read(databaseProvider));
+      final selected = await service.pickDirectory();
+      if (selected == null || !mounted || selected == currentPath) return;
+      final confirmed = await confirmAction(
+        context,
+        title: '迁移全部数据？',
+        message: '个人资料、历史记录和菜谱图片将迁移到：\n\n$selected\n\n迁移完成后，软件将只使用新目录。',
+        confirmText: '开始迁移',
+      );
+      if (!confirmed || !mounted) return;
+      setState(() => _moving = true);
+      await service.moveTo(selected);
+      if (!mounted) return;
+      setState(() {
+        _moving = false;
+        _refresh();
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('数据已迁移，之后更新软件不会改变这个目录')));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _moving = false);
+      _showError(context, error);
     }
   }
 }
@@ -595,7 +690,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
     sex: _sex,
     weightKg: double.tryParse(_weight.text) ?? widget.initial.weightKg,
     heightCm: double.tryParse(_height.text) ?? widget.initial.heightCm,
-    age: int.tryParse(_age.text) ?? widget.initial.age,
+    age: double.tryParse(_age.text)?.toInt() ?? widget.initial.age,
   );
 
   @override
@@ -646,7 +741,28 @@ class _ProfileEditorState extends State<ProfileEditor> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: () => setState(() => _baseline.text = '$_suggested()'),
+            onPressed: () {
+              final age = double.tryParse(_age.text.trim());
+              final height = double.tryParse(_height.text.trim());
+              final weight = double.tryParse(_weight.text.trim());
+              if (age == null ||
+                  !age.isFinite ||
+                  age < 12 ||
+                  age > 120 ||
+                  age != age.roundToDouble() ||
+                  height == null ||
+                  !height.isFinite ||
+                  height <= 0 ||
+                  weight == null ||
+                  !weight.isFinite ||
+                  weight <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('请先填写有效的年龄、身高和体重')),
+                );
+                return;
+              }
+              setState(() => _baseline.text = '${_suggested()}');
+            },
             icon: const Icon(Icons.auto_awesome_rounded, size: 18),
             label: const Text('重新计算并填入'),
           ),
@@ -675,7 +791,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final age = int.parse(_age.text);
+    final age = double.parse(_age.text.trim()).toInt();
     if (age < 12 || age > 120) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('年龄请输入 12–120 之间的数值')));
@@ -683,19 +799,24 @@ class _ProfileEditorState extends State<ProfileEditor> {
     }
     setState(() => _saving = true);
     final suggested = _suggested();
-    await widget.onSaved(
-      UserProfile(
-        sex: _sex,
-        age: age,
-        heightCm: double.parse(_height.text),
-        weightKg: double.parse(_weight.text),
-        suggestedBaselineKcal: suggested,
-        baselineKcal: int.parse(_baseline.text),
-        defaultDayType: _defaultType,
-        configured: widget.initial.configured,
-      ),
-    );
-    if (mounted) setState(() => _saving = false);
+    try {
+      await widget.onSaved(
+        UserProfile(
+          sex: _sex,
+          age: age,
+          heightCm: double.parse(_height.text),
+          weightKg: double.parse(_weight.text),
+          suggestedBaselineKcal: suggested,
+          baselineKcal: double.parse(_baseline.text.trim()).toInt(),
+          defaultDayType: _defaultType,
+          configured: widget.initial.configured,
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showError(context, error);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 
@@ -753,7 +874,7 @@ class _GoalEditorState extends State<GoalEditor> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
-            const Text('已存在日期保存的是历史快照，不会被此次修改覆盖。'),
+            const Text('今天使用相同日类型时会同步更新目标；今天以前的记录保留原有目标。'),
             const SizedBox(height: 20),
             NumberField(controller: _energy, label: '能量', suffix: 'kcal'),
             const SizedBox(height: 12),

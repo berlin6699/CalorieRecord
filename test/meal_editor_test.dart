@@ -2,8 +2,10 @@ import 'package:energy_balance/data/models.dart';
 import 'package:energy_balance/screens/today_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
+  setUpAll(() => initializeDateFormatting('zh_CN'));
   final recipe = Recipe(
     id: 12,
     name: '测试套餐',
@@ -81,7 +83,9 @@ void main() {
     expect(result?.perServing.energyKcal, 600);
   });
 
-  testWidgets('keeps the existing recipe workflow unchanged', (tester) async {
+  testWidgets('requires an explicit recipe choice and saves its snapshot', (
+    tester,
+  ) async {
     MealEntry? result;
     await tester.pumpWidget(
       _MealEditorHarness(
@@ -91,6 +95,15 @@ void main() {
     );
 
     await tester.tap(find.text('打开编辑器'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加到当天'));
+    await tester.pumpAndSettle();
+    expect(result, isNull);
+    expect(find.text('请先选择一份菜谱'), findsOneWidget);
+    await tester.ensureVisible(find.text('搜索或按分类选择'));
+    await tester.tap(find.text('搜索或按分类选择'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('测试套餐'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('添加到当天'));
     await tester.tap(find.text('添加到当天'));

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -12,7 +13,61 @@ class AppDatabase {
   AppDatabase._();
 
   static final AppDatabase instance = AppDatabase._();
+  static const databaseFileName = 'energy_balance.db';
+  static const _storageConfigFileName = 'storage_location.json';
   Database? _database;
+  String? _databasePath;
+  File? _storageConfigFileOverride;
+
+  @visibleForTesting
+  static Future<AppDatabase> openInMemory() async {
+    sqfliteFfiInit();
+    final instance = AppDatabase._();
+    instance._database = await databaseFactoryFfi.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: 5,
+        onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+        onCreate: instance._create,
+      ),
+    );
+    await instance._seed();
+    return instance;
+  }
+
+  @visibleForTesting
+  static Future<AppDatabase> openAtForTesting({
+    required String databasePath,
+    required String configPath,
+  }) async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    final instance = AppDatabase._()
+      .._storageConfigFileOverride = File(configPath);
+    instance._database = await instance._openAt(databasePath);
+    instance._databasePath = p.normalize(p.absolute(databasePath));
+    await instance._seed();
+    return instance;
+  }
+
+  @visibleForTesting
+  static Future<AppDatabase> openConfiguredForTesting({
+    required String defaultDirectory,
+    required String configPath,
+  }) async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    final instance = AppDatabase._()
+      .._storageConfigFileOverride = File(configPath);
+    final root = await instance._configuredRoot(defaultDirectory);
+    final databasePath = p.normalize(
+      p.absolute(p.join(root, databaseFileName)),
+    );
+    instance._database = await instance._openAt(databasePath);
+    instance._databasePath = databasePath;
+    await instance._seed();
+    return instance;
+  }
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -20,19 +75,134 @@ class AppDatabase {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
-    final root = Platform.isWindows || Platform.isLinux
+    final defaultRoot = Platform.isWindows || Platform.isLinux
         ? (await getApplicationSupportDirectory()).path
         : await getDatabasesPath();
-    final path = p.join(root, 'energy_balance.db');
-    _database = await openDatabase(
+    final root = await _configuredRoot(defaultRoot);
+    final path = p.normalize(p.absolute(p.join(root, databaseFileName)));
+    _database = await _openAt(path);
+    _databasePath = path;
+    await _seed();
+    return _database!;
+  }
+
+  Future<Database> _openAt(String path) async {
+    await Directory(p.dirname(path)).create(recursive: true);
+    return openDatabase(
       path,
       version: 5,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
       onUpgrade: _upgrade,
     );
-    await _seed();
-    return _database!;
+  }
+
+  Future<String> get storageDirectory async {
+    await database;
+    return p.dirname(_databasePath!);
+  }
+
+  Future<String> get defaultStorageDirectory async =>
+      (await getApplicationSupportDirectory()).path;
+
+  Future<void> moveStorageDirectory(String directoryPath) async {
+    if (!Platform.isWindows && !Platform.isLinux) {
+      throw UnsupportedError('当前平台不支持自定义数据目录');
+    }
+    final targetRoot = p.normalize(p.absolute(directoryPath.trim()));
+    if (targetRoot.isEmpty) throw const FormatException('请选择有效目录');
+    final currentDb = await database;
+    final currentPath = p.normalize(p.absolute(_databasePath!));
+    final targetPath = p.join(targetRoot, databaseFileName);
+    if (p.equals(currentPath, targetPath)) return;
+    if (await File(targetPath).exists()) {
+      throw StateError('所选目录中已有 $databaseFileName，请选择其他目录');
+    }
+
+    final snapshot = await exportAll();
+    final targetDirectory = Directory(targetRoot);
+    await targetDirectory.create(recursive: true);
+    final probe = File(
+      p.join(
+        targetRoot,
+        '.calorie_record_write_test_${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+    await probe.writeAsString('ok', flush: true);
+    await probe.delete();
+
+    Database? targetDb;
+    try {
+      targetDb = await _openAt(targetPath);
+      _database = targetDb;
+      _databasePath = targetPath;
+      await _seed();
+      await restoreAll(snapshot);
+      final restored = await exportAll();
+      for (final key in [
+        'goals',
+        'days',
+        'recipes',
+        'recipeCategories',
+        'meals',
+        'exercises',
+        'trainingPlans',
+        'bodyMeasurements',
+      ]) {
+        if ((restored[key] as List).length != (snapshot[key] as List).length) {
+          throw FileSystemException('迁移后的数据校验失败：$key');
+        }
+      }
+      await _writeStorageConfig(targetRoot);
+    } catch (_) {
+      if (targetDb != null) await targetDb.close();
+      _database = currentDb;
+      _databasePath = currentPath;
+      if (await File(targetPath).exists()) {
+        await databaseFactory.deleteDatabase(targetPath);
+      }
+      rethrow;
+    }
+
+    await currentDb.close();
+    try {
+      await databaseFactory.deleteDatabase(currentPath);
+    } catch (_) {
+      // The active database has already moved successfully. A locked stale
+      // source can safely remain and will no longer be opened.
+    }
+  }
+
+  Future<String> _configuredRoot(String defaultRoot) async {
+    if (!Platform.isWindows && !Platform.isLinux) return defaultRoot;
+    final config = await _storageConfigFile(defaultRoot);
+    if (!await config.exists()) return defaultRoot;
+    try {
+      final value = jsonDecode(await config.readAsString());
+      final configured = value is Map<String, dynamic>
+          ? value['directory'] as String?
+          : null;
+      return configured == null || configured.trim().isEmpty
+          ? defaultRoot
+          : configured;
+    } on FormatException {
+      return defaultRoot;
+    }
+  }
+
+  Future<File> _storageConfigFile([String? defaultRoot]) async {
+    if (_storageConfigFileOverride != null) return _storageConfigFileOverride!;
+    final root = defaultRoot ?? (await getApplicationSupportDirectory()).path;
+    return File(p.join(root, _storageConfigFileName));
+  }
+
+  Future<void> _writeStorageConfig(String directoryPath) async {
+    final config = await _storageConfigFile();
+    await config.parent.create(recursive: true);
+    await config.writeAsString(
+      jsonEncode({'directory': directoryPath}),
+      flush: true,
+    );
   }
 
   Future<void> _create(Database db, int version) async {
@@ -711,21 +881,29 @@ class AppDatabase {
     final exerciseByDate = {
       for (final row in exerciseRows) row['date'] as String: row,
     };
-    return dayRows.map((row) {
-      final key = row['date'] as String;
-      final meal = mealsByDate[key];
-      final exercise = exerciseByDate[key];
-      return DailySummary(
-        record: _dayFromRow(row),
-        intake: Nutrition(
-          energyKcal: (meal?['energy'] as num?)?.toDouble() ?? 0,
-          carbsG: (meal?['carbs'] as num?)?.toDouble() ?? 0,
-          proteinG: (meal?['protein'] as num?)?.toDouble() ?? 0,
-          fatG: (meal?['fat'] as num?)?.toDouble() ?? 0,
-        ),
-        exerciseKcal: (exercise?['energy'] as num?)?.toDouble() ?? 0,
-      );
-    }).toList();
+    return dayRows
+        .where(
+          (row) =>
+              row['type'] == DayType.indulgence.name ||
+              mealsByDate.containsKey(row['date']) ||
+              exerciseByDate.containsKey(row['date']),
+        )
+        .map((row) {
+          final key = row['date'] as String;
+          final meal = mealsByDate[key];
+          final exercise = exerciseByDate[key];
+          return DailySummary(
+            record: _dayFromRow(row),
+            intake: Nutrition(
+              energyKcal: (meal?['energy'] as num?)?.toDouble() ?? 0,
+              carbsG: (meal?['carbs'] as num?)?.toDouble() ?? 0,
+              proteinG: (meal?['protein'] as num?)?.toDouble() ?? 0,
+              fatG: (meal?['fat'] as num?)?.toDouble() ?? 0,
+            ),
+            exerciseKcal: (exercise?['energy'] as num?)?.toDouble() ?? 0,
+          );
+        })
+        .toList();
   }
 
   Future<Map<String, dynamic>> exportAll() async {

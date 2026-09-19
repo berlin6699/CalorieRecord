@@ -6,6 +6,7 @@ import '../core/app_theme.dart';
 import '../data/models.dart';
 import '../state/app_controller.dart';
 import '../widgets/common.dart';
+import '../widgets/recipe_picker.dart';
 
 class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
@@ -14,206 +15,149 @@ class TodayScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appControllerProvider).requireValue;
     final controller = ref.read(appControllerProvider.notifier);
-    final summary = data.summary;
-    if (useDesktopLayout(context)) {
-      return _buildDesktop(context, ref, data);
-    }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('能量收支'),
-        actions: [
-          IconButton(
-            tooltip: '选择日期',
-            onPressed: () => _pickDate(context, ref, data.selectedDate),
-            icon: const Icon(Icons.calendar_month_rounded),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: ContentFrame(
-        maxWidth: 1040,
-        child: RefreshIndicator(
-          onRefresh: () =>
-              controller.reloadAll(selectedDate: data.selectedDate),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 2, 18, 34),
-            children: [
-              _DateStrip(
-                selected: data.selectedDate,
-                onPrevious: () => controller.selectDate(
-                  data.selectedDate.subtract(const Duration(days: 1)),
-                ),
-                onNext: () => controller.selectDate(
-                  data.selectedDate.add(const Duration(days: 1)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<DayType>(
-                  segments: DayType.values
-                      .map(
-                        (type) => ButtonSegment(
-                          value: type,
-                          label: Text(type.shortLabel),
-                          icon: Icon(switch (type) {
-                            DayType.cardio => Icons.directions_run_rounded,
-                            DayType.strength => Icons.fitness_center_rounded,
-                            DayType.rest => Icons.self_improvement_rounded,
-                            DayType.indulgence => Icons.celebration_rounded,
-                          }),
-                        ),
-                      )
-                      .toList(),
-                  selected: {data.day.type},
-                  onSelectionChanged: (value) =>
-                      controller.setDayType(value.first),
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (data.day.type == DayType.indulgence)
-                _IndulgenceDayCard(
-                  hasSavedEntries:
-                      data.meals.isNotEmpty || data.exercises.isNotEmpty,
-                )
-              else ...[
-                _EnergyHero(summary: summary),
-                const SizedBox(height: 18),
-                _NutritionGrid(summary: summary, meals: data.meals),
-                const SizedBox(height: 28),
-                SectionHeader(
-                  title: '今日餐食',
-                  subtitle:
-                      '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
-                  trailing: IconButton.filledTonal(
-                    tooltip: '添加餐食',
-                    onPressed: () => _addMeal(context, ref, data),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                ),
-                if (data.meals.isEmpty)
-                  EmptyState(
-                    icon: Icons.ramen_dining_rounded,
-                    title: '还没有餐食记录',
-                    message: data.recipes.isEmpty
-                        ? '可以直接记录临时餐食，不必先创建菜谱'
-                        : '可以选择菜谱，也可以直接记录临时餐食',
-                    action: FilledButton.tonalIcon(
-                      onPressed: () => _addMeal(context, ref, data),
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('添加餐食'),
+    final desktop = useDesktopLayout(context);
+    final isToday = dateKey(data.selectedDate) == dateKey(DateTime.now());
+    final dayLabel = isToday ? '今日' : '当日';
+    final indulgence = data.day.type == DayType.indulgence;
+    final meals = _DesktopRecordsPanel(
+      icon: Icons.restaurant_rounded,
+      iconColor: warmColor,
+      iconBackground: const Color(0xFFF6EFE1),
+      title: '$dayLabel餐食',
+      subtitle:
+          '${data.meals.length} 条记录 · ${_kcal(data.intake.energyKcal)} kcal',
+      actionLabel: '添加',
+      onAdd: () => _addMeal(context, ref, data),
+      child: data.meals.isEmpty
+          ? const _DesktopPanelEmpty(
+              icon: Icons.ramen_dining_rounded,
+              message: '选择常吃的菜谱，或直接记一餐外食',
+            )
+          : Column(
+              children: [
+                for (final type in MealType.values)
+                  if (data.meals.any((meal) => meal.mealType == type)) ...[
+                    _MealGroupHeading(
+                      type: type,
+                      meals: data.meals
+                          .where((meal) => meal.mealType == type)
+                          .toList(),
                     ),
-                  )
-                else
-                  Card(
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < data.meals.length; i++) ...[
-                          _MealTile(
-                            meal: data.meals[i],
-                            recipe: _recipeForMeal(data.recipes, data.meals[i]),
-                            onEdit: () =>
-                                _editMeal(context, ref, data.meals[i]),
-                            onDelete: () =>
-                                _deleteMeal(context, ref, data.meals[i]),
-                          ),
-                          if (i != data.meals.length - 1)
-                            const Divider(height: 1, indent: 70),
-                        ],
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 28),
-                SectionHeader(
-                  title: '今日运动',
-                  subtitle:
-                      '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
-                  trailing: IconButton.filledTonal(
-                    tooltip: '添加运动',
-                    onPressed: () => _addExercise(context, ref, data),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                ),
-                if (data.exercises.isEmpty)
-                  EmptyState(
-                    icon: Icons.directions_run_rounded,
-                    title: '还没有运动记录',
-                    message: '记录运动项目和本次消耗的能量',
-                    action: FilledButton.tonalIcon(
-                      onPressed: () => _addExercise(context, ref, data),
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('添加运动'),
-                    ),
-                  )
-                else
-                  Card(
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < data.exercises.length; i++) ...[
-                          _ExerciseTile(
-                            exercise: data.exercises[i],
-                            onEdit: () =>
-                                _editExercise(context, ref, data.exercises[i]),
-                            onDelete: () => _deleteExercise(
-                              context,
-                              ref,
-                              data.exercises[i],
-                            ),
-                          ),
-                          if (i != data.exercises.length - 1)
-                            const Divider(height: 1, indent: 70),
-                        ],
-                      ],
-                    ),
-                  ),
+                    for (final meal in data.meals.where(
+                      (meal) => meal.mealType == type,
+                    ))
+                      _MealTile(
+                        meal: meal,
+                        recipe: _recipeForMeal(data.recipes, meal),
+                        onEdit: () => _editMeal(context, ref, meal),
+                        onDelete: () => _deleteMeal(context, ref, meal),
+                      ),
+                  ],
+                const SizedBox(height: 8),
               ],
-            ],
-          ),
-        ),
-      ),
+            ),
     );
-  }
-
-  Widget _buildDesktop(BuildContext context, WidgetRef ref, AppState data) {
-    final controller = ref.read(appControllerProvider.notifier);
-    final summary = data.summary;
-    final fullDate = DateFormat(
-      'yyyy年M月d日 EEEE',
-      'zh_CN',
-    ).format(data.selectedDate);
+    final exercises = _DesktopRecordsPanel(
+      icon: Icons.directions_run_rounded,
+      iconColor: brandGreen,
+      iconBackground: const Color(0xFFE7F1E9),
+      title: '$dayLabel运动',
+      subtitle:
+          '${data.exercises.length} 条记录 · ${_kcal(data.exerciseKcal)} kcal',
+      actionLabel: '添加',
+      onAdd: () => _addExercise(context, ref, data),
+      child: data.exercises.isEmpty
+          ? const _DesktopPanelEmpty(
+              icon: Icons.directions_run_rounded,
+              message: '记录一次运动，为今天留个脚印',
+            )
+          : Column(
+              children: [
+                for (final exercise in data.exercises)
+                  _ExerciseTile(
+                    exercise: exercise,
+                    onEdit: () => _editExercise(context, ref, exercise),
+                    onDelete: () => _deleteExercise(context, ref, exercise),
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+    );
     return Scaffold(
+      appBar: desktop
+          ? null
+          : AppBar(
+              title: Text(isToday ? '今日概览' : '每日记录'),
+              actions: [
+                if (!isToday)
+                  TextButton(
+                    onPressed: () => controller.selectDate(DateTime.now()),
+                    child: const Text('回到今天'),
+                  ),
+                IconButton(
+                  tooltip: '选择日期',
+                  onPressed: () => _pickDate(context, ref, data.selectedDate),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ),
       body: Column(
         children: [
-          DesktopPageHeader(
-            title: '今日概览',
-            subtitle: '$fullDate · 集中查看今天的能量与营养状态',
-            actions: [
-              OutlinedButton.icon(
-                onPressed: () => _pickDate(context, ref, data.selectedDate),
-                icon: const Icon(Icons.calendar_month_outlined, size: 19),
-                label: const Text('选择日期'),
-              ),
-            ],
-          ),
+          if (desktop)
+            DesktopPageHeader(
+              title: isToday ? '今日概览' : '每日记录',
+              subtitle: isToday
+                  ? '吃好每一餐，记录自己的节奏。'
+                  : '正在查看 ${DateFormat('yyyy年M月d日').format(data.selectedDate)} 的记录',
+              actions: [
+                if (!isToday)
+                  TextButton(
+                    onPressed: () => controller.selectDate(DateTime.now()),
+                    child: const Text('回到今天'),
+                  ),
+                if (!indulgence) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _addExercise(context, ref, data),
+                    icon: const Icon(Icons.directions_run_rounded, size: 18),
+                    label: const Text('记录运动'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => _addMeal(context, ref, data),
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: const Text('记录餐食'),
+                  ),
+                ],
+              ],
+            ),
           Expanded(
             child: ContentFrame(
               maxWidth: 1420,
-              child: Scrollbar(
+              child: RefreshIndicator(
+                onRefresh: () =>
+                    controller.reloadAll(selectedDate: data.selectedDate),
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+                  key: const PageStorageKey('today-scroll'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    desktop ? 28 : 18,
+                    desktop ? 24 : 4,
+                    desktop ? 28 : 18,
+                    32,
+                  ),
                   children: [
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
+                        padding: const EdgeInsets.all(10),
+                        child: AdaptiveColumns(
+                          breakpoint: 760,
                           children: [
                             Expanded(
                               flex: 4,
                               child: _DateStrip(
                                 selected: data.selectedDate,
+                                onPick: () =>
+                                    _pickDate(context, ref, data.selectedDate),
                                 onPrevious: () => controller.selectDate(
                                   data.selectedDate.subtract(
                                     const Duration(days: 1),
@@ -226,37 +170,13 @@ class TodayScreen extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Container(
-                              width: 1,
-                              height: 34,
-                              color: const Color(0x14708078),
-                            ),
-                            const SizedBox(width: 20),
+                            const SizedBox(width: 12),
                             Expanded(
-                              flex: 6,
-                              child: SegmentedButton<DayType>(
-                                segments: DayType.values
-                                    .map(
-                                      (type) => ButtonSegment(
-                                        value: type,
-                                        label: Text(type.shortLabel),
-                                        icon: Icon(switch (type) {
-                                          DayType.cardio =>
-                                            Icons.directions_run_rounded,
-                                          DayType.strength =>
-                                            Icons.fitness_center_rounded,
-                                          DayType.rest =>
-                                            Icons.self_improvement_rounded,
-                                          DayType.indulgence =>
-                                            Icons.celebration_rounded,
-                                        }),
-                                      ),
-                                    )
-                                    .toList(),
-                                selected: {data.day.type},
-                                onSelectionChanged: (value) =>
-                                    controller.setDayType(value.first),
+                              flex: 5,
+                              child: _DayTypeSelector(
+                                selected: data.day.type,
+                                onChanged: (type) =>
+                                    _changeDayType(context, ref, data, type),
                               ),
                             ),
                           ],
@@ -264,124 +184,82 @@ class TodayScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    if (data.day.type == DayType.indulgence)
+                    if (indulgence)
                       _IndulgenceDayCard(
                         hasSavedEntries:
                             data.meals.isNotEmpty || data.exercises.isNotEmpty,
+                        isToday: isToday,
                       )
                     else ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      if (desktop)
+                        AdaptiveColumns(
+                          breakpoint: 900,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: _EnergyHero(
+                                summary: data.summary,
+                                hasEntries:
+                                    data.meals.isNotEmpty ||
+                                    data.exercises.isNotEmpty,
+                                isToday: isToday,
+                              ),
+                            ),
+                            const SizedBox(width: 18),
+                            Expanded(
+                              flex: 4,
+                              child: _DesktopNutritionPanel(
+                                summary: data.summary,
+                                meals: data.meals,
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (!desktop) ...[
+                        _EnergyHero(
+                          summary: data.summary,
+                          hasEntries:
+                              data.meals.isNotEmpty ||
+                              data.exercises.isNotEmpty,
+                          isToday: isToday,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => _addMeal(context, ref, data),
+                                icon: const Icon(Icons.add_rounded),
+                                label: const Text('记录餐食'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _addExercise(context, ref, data),
+                                icon: const Icon(
+                                  Icons.directions_run_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('记录运动'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        _DesktopNutritionPanel(
+                          summary: data.summary,
+                          meals: data.meals,
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      AdaptiveColumns(
+                        breakpoint: 980,
                         children: [
-                          Expanded(
-                            flex: 5,
-                            child: _EnergyHero(summary: summary),
-                          ),
+                          Expanded(flex: 6, child: meals),
                           const SizedBox(width: 18),
-                          Expanded(
-                            flex: 4,
-                            child: _DesktopNutritionPanel(
-                              summary: summary,
-                              meals: data.meals,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _DesktopRecordsPanel(
-                              icon: Icons.restaurant_rounded,
-                              iconColor: const Color(0xFF9A6800),
-                              iconBackground: const Color(0xFFFFF3D6),
-                              title: '今日餐食',
-                              subtitle:
-                                  '${data.meals.length} 条 · ${_kcal(data.intake.energyKcal)} kcal',
-                              actionLabel: '添加餐食',
-                              onAdd: () => _addMeal(context, ref, data),
-                              child: data.meals.isEmpty
-                                  ? _DesktopPanelEmpty(
-                                      icon: Icons.ramen_dining_rounded,
-                                      message: data.recipes.isEmpty
-                                          ? '可直接记录临时餐食'
-                                          : '可选择菜谱或记录临时餐食',
-                                    )
-                                  : Column(
-                                      children: [
-                                        for (
-                                          var i = 0;
-                                          i < data.meals.length;
-                                          i++
-                                        ) ...[
-                                          _MealTile(
-                                            meal: data.meals[i],
-                                            recipe: _recipeForMeal(
-                                              data.recipes,
-                                              data.meals[i],
-                                            ),
-                                            onEdit: () => _editMeal(
-                                              context,
-                                              ref,
-                                              data.meals[i],
-                                            ),
-                                            onDelete: () => _deleteMeal(
-                                              context,
-                                              ref,
-                                              data.meals[i],
-                                            ),
-                                          ),
-                                          if (i != data.meals.length - 1)
-                                            const Divider(indent: 68),
-                                        ],
-                                      ],
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(width: 18),
-                          Expanded(
-                            child: _DesktopRecordsPanel(
-                              icon: Icons.directions_run_rounded,
-                              iconColor: brandGreen,
-                              iconBackground: const Color(0xFFE7F5EE),
-                              title: '今日运动',
-                              subtitle:
-                                  '${data.exercises.length} 条 · ${_kcal(data.exerciseKcal)} kcal',
-                              actionLabel: '添加运动',
-                              onAdd: () => _addExercise(context, ref, data),
-                              child: data.exercises.isEmpty
-                                  ? const _DesktopPanelEmpty(
-                                      icon: Icons.directions_run_rounded,
-                                      message: '今天还没有运动记录',
-                                    )
-                                  : Column(
-                                      children: [
-                                        for (
-                                          var i = 0;
-                                          i < data.exercises.length;
-                                          i++
-                                        ) ...[
-                                          _ExerciseTile(
-                                            exercise: data.exercises[i],
-                                            onEdit: () => _editExercise(
-                                              context,
-                                              ref,
-                                              data.exercises[i],
-                                            ),
-                                            onDelete: () => _deleteExercise(
-                                              context,
-                                              ref,
-                                              data.exercises[i],
-                                            ),
-                                          ),
-                                          if (i != data.exercises.length - 1)
-                                            const Divider(indent: 68),
-                                        ],
-                                      ],
-                                    ),
-                            ),
-                          ),
+                          Expanded(flex: 4, child: exercises),
                         ],
                       ),
                     ],
@@ -393,6 +271,35 @@ class TodayScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _changeDayType(
+    BuildContext context,
+    WidgetRef ref,
+    AppState data,
+    DayType type,
+  ) async {
+    if (type == data.day.type) return;
+    try {
+      await ref.read(appControllerProvider.notifier).setDayType(type);
+      if (context.mounted &&
+          (type == DayType.indulgence || data.day.type == DayType.indulgence)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              type == DayType.indulgence
+                  ? '已设为放纵日：净收支记为 0，已有记录仍保留'
+                  : '已恢复${type.label}，餐食与运动重新参与统计',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('切换失败，请重试')));
+      }
+    }
   }
 
   Future<void> _pickDate(
@@ -424,8 +331,12 @@ class TodayScreen extends ConsumerWidget {
       builder: (context) =>
           MealEditor(date: data.selectedDate, recipes: data.recipes),
     );
-    if (meal != null) {
-      await ref.read(appControllerProvider.notifier).saveMeal(meal);
+    if (meal != null && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref.read(appControllerProvider.notifier).saveMeal(meal),
+        '已记录到 ${DateFormat('M月d日').format(meal.date)} · ${meal.mealType.label}',
+      );
     }
   }
 
@@ -439,8 +350,12 @@ class TodayScreen extends ConsumerWidget {
       builder: (context) =>
           MealEditor(date: meal.date, recipes: const [], initial: meal),
     );
-    if (updated != null) {
-      await ref.read(appControllerProvider.notifier).saveMeal(updated);
+    if (updated != null && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref.read(appControllerProvider.notifier).saveMeal(updated),
+        '餐食已更新',
+      );
     }
   }
 
@@ -456,8 +371,12 @@ class TodayScreen extends ConsumerWidget {
       confirmText: '删除',
       destructive: true,
     );
-    if (confirmed) {
-      await ref.read(appControllerProvider.notifier).deleteMeal(meal.id!);
+    if (confirmed && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref.read(appControllerProvider.notifier).deleteMeal(meal.id!),
+        '餐食记录已删除',
+      );
     }
   }
 
@@ -470,8 +389,12 @@ class TodayScreen extends ConsumerWidget {
       context: context,
       builder: (context) => ExerciseEditor(date: data.selectedDate),
     );
-    if (exercise != null) {
-      await ref.read(appControllerProvider.notifier).saveExercise(exercise);
+    if (exercise != null && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref.read(appControllerProvider.notifier).saveExercise(exercise),
+        '运动已记录',
+      );
     }
   }
 
@@ -485,8 +408,12 @@ class TodayScreen extends ConsumerWidget {
       builder: (context) =>
           ExerciseEditor(date: exercise.date, initial: exercise),
     );
-    if (updated != null) {
-      await ref.read(appControllerProvider.notifier).saveExercise(updated);
+    if (updated != null && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref.read(appControllerProvider.notifier).saveExercise(updated),
+        '运动已更新',
+      );
     }
   }
 
@@ -502,10 +429,33 @@ class TodayScreen extends ConsumerWidget {
       confirmText: '删除',
       destructive: true,
     );
-    if (confirmed) {
-      await ref
-          .read(appControllerProvider.notifier)
-          .deleteExercise(exercise.id!);
+    if (confirmed && context.mounted) {
+      await _recordAction(
+        context,
+        () => ref
+            .read(appControllerProvider.notifier)
+            .deleteExercise(exercise.id!),
+        '运动记录已删除',
+      );
+    }
+  }
+
+  Future<void> _recordAction(
+    BuildContext context,
+    Future<void> Function() action,
+    String message,
+  ) async {
+    try {
+      await action();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('操作未完成，请重试')));
+      }
     }
   }
 }
@@ -580,7 +530,6 @@ class _DesktopNutrientRow extends StatelessWidget {
     required this.target,
     required this.breakdown,
   });
-
   final String label;
   final double actual;
   final double target;
@@ -588,50 +537,45 @@ class _DesktopNutrientRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reached = target > 0 && actual >= target;
+    final status = target <= 0
+        ? '未设目标'
+        : actual >= target
+        ? (actual == target ? '已达标' : '已达标 · 超出 ${_one(actual - target)}g')
+        : '还差 ${_one(target - actual)}g';
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            SizedBox(
-              width: 58,
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: inkColor,
               ),
             ),
+            const SizedBox(width: 8),
             Expanded(
-              child: _StackedNutritionBar(target: target, breakdown: breakdown),
-            ),
-            const SizedBox(width: 14),
-            SizedBox(
-              width: 92,
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${_one(actual)}g',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    TextSpan(
-                      text: ' / ${_one(target)}g',
-                      style: const TextStyle(
-                        color: Color(0xFF7A857F),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                textAlign: TextAlign.right,
+              child: Text(
+                '${_one(actual)} / ${_one(target)} g',
+                style: const TextStyle(color: mutedColor, fontSize: 12),
               ),
             ),
-            const SizedBox(width: 10),
-            Icon(
-              reached ? Icons.check_circle_rounded : Icons.timelapse_rounded,
-              color: reached ? brandGreen : const Color(0xFF9AA49F),
-              size: 18,
+            Text(
+              status,
+              style: TextStyle(
+                fontSize: 11,
+                color: actual >= target && target > 0 ? brandGreen : mutedColor,
+              ),
             ),
           ],
+        ),
+        const SizedBox(height: 9),
+        Tooltip(
+          message: MealType.values
+              .map((type) => '${type.label} ${_one(breakdown[type] ?? 0)}g')
+              .join(' · '),
+          child: _StackedNutritionBar(target: target, breakdown: breakdown),
         ),
       ],
     );
@@ -728,9 +672,13 @@ class _DesktopPanelEmpty extends StatelessWidget {
 }
 
 class _IndulgenceDayCard extends StatelessWidget {
-  const _IndulgenceDayCard({required this.hasSavedEntries});
+  const _IndulgenceDayCard({
+    required this.hasSavedEntries,
+    required this.isToday,
+  });
 
   final bool hasSavedEntries;
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -773,7 +721,7 @@ class _IndulgenceDayCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '今天是放纵日',
+                isToday ? '今天，给自己放个假' : '这一天是放纵日',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: const Color(0xFF71440B),
                   fontWeight: FontWeight.w900,
@@ -781,7 +729,7 @@ class _IndulgenceDayCard extends StatelessWidget {
               ),
               const SizedBox(height: 7),
               const Text(
-                '今天不统计饮食、营养或运动收支，净能量默认按 0 kcal 平衡记录。',
+                '放纵日不统计饮食、营养或运动收支，净能量默认按 0 kcal 平衡记录。',
                 style: TextStyle(color: Color(0xFF7A592D), height: 1.45),
               ),
               if (hasSavedEntries) ...[
@@ -827,11 +775,13 @@ class _DateStrip extends StatelessWidget {
     required this.selected,
     required this.onPrevious,
     required this.onNext,
+    required this.onPick,
   });
 
   final DateTime selected;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+  final VoidCallback onPick;
 
   @override
   Widget build(BuildContext context) {
@@ -839,104 +789,114 @@ class _DateStrip extends StatelessWidget {
     final formatter = DateFormat('M月d日 EEEE', 'zh_CN');
     return Row(
       children: [
-        IconButton(onPressed: onPrevious, icon: const Icon(Icons.chevron_left)),
+        IconButton(
+          tooltip: '前一天',
+          onPressed: onPrevious,
+          icon: const Icon(Icons.chevron_left),
+        ),
         Expanded(
-          child: Column(
-            children: [
-              Text(
-                today ? '今天' : formatter.format(selected),
-                style: Theme.of(context).textTheme.titleMedium,
+          child: InkWell(
+            onTap: onPick,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                children: [
+                  Text(
+                    today ? '今天' : formatter.format(selected),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (today)
+                    Text(
+                      formatter.format(selected),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
               ),
-              if (today)
-                Text(
-                  formatter.format(selected),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-            ],
+            ),
           ),
         ),
-        IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right)),
+        IconButton(
+          tooltip: '后一天',
+          onPressed: onNext,
+          icon: const Icon(Icons.chevron_right),
+        ),
       ],
     );
   }
 }
 
 class _EnergyHero extends StatelessWidget {
-  const _EnergyHero({required this.summary});
-
+  const _EnergyHero({
+    required this.summary,
+    required this.hasEntries,
+    required this.isToday,
+  });
   final DailySummary summary;
+  final bool hasEntries;
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) {
     final net = summary.netEnergy;
-    final status = net < 0
+    final status = !hasEntries
+        ? '等待记录'
+        : net < 0
         ? '热量缺口'
         : net > 0
         ? '热量增加'
         : '能量平衡';
-    final signedNet = net < 0
-        ? '−${_kcal(net.abs())}'
-        : net > 0
-        ? '+${_kcal(net)}'
-        : '0';
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF147553), Color(0xFF22A06B)],
+          colors: [Color(0xFF204F40), Color(0xFF326F55)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x3322A06B),
-            blurRadius: 24,
-            offset: Offset(0, 10),
+            color: Color(0x18204F40),
+            blurRadius: 20,
+            offset: Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('今日净能量', style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 5),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: net.abs()),
-                duration: const Duration(milliseconds: 450),
-                builder: (context, value, child) => Text(
-                  signedNet,
+              const Icon(
+                Icons.bolt_rounded,
+                color: Color(0xFFD7E9A9),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isToday ? '今日净能量' : '当日净能量',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 43,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                    letterSpacing: -1.5,
+                    color: Color(0xFFD5E4D9),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(left: 7, bottom: 5),
-                child: Text('kcal', style: TextStyle(color: Colors.white70)),
-              ),
-              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 6,
+                  vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(99),
+                  color: Colors.white.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   status,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE5EFC5),
+                    fontSize: 12,
                   ),
                 ),
               ),
@@ -944,24 +904,63 @@ class _EnergyHero extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _HeroMetric(label: '摄入', value: summary.intake.energyKcal),
+              Flexible(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: hasEntries ? net : 0),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      !hasEntries
+                          ? '—'
+                          : '${value < -.5
+                                ? '−'
+                                : value > .5
+                                ? '+'
+                                : ''}${value.abs().round()}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 54,
+                        fontWeight: FontWeight.w600,
+                        height: 1.06,
+                        letterSpacing: -1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 10, bottom: 5),
+                child: Text('kcal', style: TextStyle(color: Color(0xFFBED1C6))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            hasEntries ? '摄入 − 基础消耗 − 运动消耗' : '尚未记录 · 添加餐食或运动后计算收支',
+            style: const TextStyle(color: Color(0xFFBED1C6), fontSize: 12),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Divider(color: Color(0x26FFFFFF)),
+          ),
+          Row(
+            children: [
+              _HeroMetric(label: '饮食摄入', value: summary.intake.energyKcal),
               _HeroDivider(),
               _HeroMetric(
-                label: '基础',
+                label: '基础消耗',
                 value: summary.record.baselineKcal.toDouble(),
               ),
               _HeroDivider(),
-              _HeroMetric(label: '运动', value: summary.exerciseKcal),
+              _HeroMetric(label: '运动消耗', value: summary.exerciseKcal),
             ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            net == 0 ? '今日净能量为 0 kcal' : '今日净能量为 $signedNet kcal（$status）',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),
@@ -1002,58 +1001,6 @@ class _HeroDivider extends StatelessWidget {
     margin: const EdgeInsets.symmetric(horizontal: 12),
     color: Colors.white24,
   );
-}
-
-class _NutritionGrid extends StatelessWidget {
-  const _NutritionGrid({required this.summary, required this.meals});
-  final DailySummary summary;
-  final List<MealEntry> meals;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      (
-        '碳水',
-        summary.intake.carbsG,
-        summary.record.target.carbsG,
-        _mealBreakdown(meals, (value) => value.carbsG),
-      ),
-      (
-        '蛋白质',
-        summary.intake.proteinG,
-        summary.record.target.proteinG,
-        _mealBreakdown(meals, (value) => value.proteinG),
-      ),
-      (
-        '脂肪',
-        summary.intake.fatG,
-        summary.record.target.fatG,
-        _mealBreakdown(meals, (value) => value.fatG),
-      ),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _MealTypeLegend(),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              Expanded(
-                child: _NutrientCard(
-                  label: items[i].$1,
-                  actual: items[i].$2,
-                  target: items[i].$3,
-                  breakdown: items[i].$4,
-                ),
-              ),
-              if (i != items.length - 1) const SizedBox(width: 10),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
 }
 
 class _MealTypeLegend extends StatelessWidget {
@@ -1153,56 +1100,120 @@ class _StackedNutritionBar extends StatelessWidget {
   );
 }
 
-class _NutrientCard extends StatelessWidget {
-  const _NutrientCard({
-    required this.label,
-    required this.actual,
-    required this.target,
-    required this.breakdown,
-  });
-
-  final String label;
-  final double actual;
-  final double target;
-  final Map<MealType, double> breakdown;
-
+class _MealGroupHeading extends StatelessWidget {
+  const _MealGroupHeading({required this.type, required this.meals});
+  final MealType type;
+  final List<MealEntry> meals;
   @override
-  Widget build(BuildContext context) {
-    final gap = target - actual;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 10),
-            Text(
-              '${_one(actual)}g',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            Text(
-              '目标 ${_one(target)}g',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 10),
-            _StackedNutritionBar(target: target, breakdown: breakdown),
-            const SizedBox(height: 8),
-            Text(
-              gap >= 0 ? '还差 ${_one(gap)}g' : '超出 ${_one(gap.abs())}g',
-              style: TextStyle(
-                color: gap >= 0
-                    ? const Color(0xFF65726C)
-                    : const Color(0xFFD14343),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+    child: Row(
+      children: [
+        Container(
+          width: 4,
+          height: 14,
+          decoration: BoxDecoration(
+            color: _mealTypeColor(type),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          type.label,
+          style: TextStyle(
+            color: _mealTypeColor(type),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          '${_kcal(meals.fold<double>(0, (sum, meal) => sum + meal.total.energyKcal))} kcal',
+          style: const TextStyle(color: mutedColor, fontSize: 11),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DayTypeSelector extends StatelessWidget {
+  const _DayTypeSelector({required this.selected, required this.onChanged});
+  final DayType selected;
+  final ValueChanged<DayType> onChanged;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F4EF),
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Row(
+      children: [
+        for (final type in DayType.values)
+          Expanded(
+            child: Semantics(
+              selected: type == selected,
+              button: true,
+              child: Tooltip(
+                message: type.label,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onChanged(type),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        color: type == selected
+                            ? Colors.white
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: type == selected
+                            ? const [
+                                BoxShadow(
+                                  color: Color(0x0D20362E),
+                                  blurRadius: 5,
+                                  offset: Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            switch (type) {
+                              DayType.cardio => Icons.directions_run_rounded,
+                              DayType.strength => Icons.fitness_center_rounded,
+                              DayType.rest => Icons.spa_outlined,
+                              DayType.indulgence => Icons.celebration_outlined,
+                            },
+                            size: 16,
+                            color: type == selected ? deepGreen : mutedColor,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            type.shortLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: type == selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: type == selected ? deepGreen : mutedColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
+      ],
+    ),
+  );
 }
 
 class _MealTile extends StatelessWidget {
@@ -1216,110 +1227,86 @@ class _MealTile extends StatelessWidget {
   final Recipe? recipe;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-
   @override
-  Widget build(BuildContext context) => ListTile(
-    isThreeLine: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
-    leading: ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: recipe?.imageBytes == null
-            ? _MealFallbackIcon(mealType: meal.mealType)
-            : Image.memory(
-                recipe!.imageBytes!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) =>
-                    _MealFallbackIcon(mealType: meal.mealType),
-              ),
-      ),
-    ),
-    title: Row(
-      children: [
-        Expanded(
-          child: Text(
-            meal.recipeName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '${_kcal(meal.total.energyKcal)} kcal',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-        ),
-      ],
-    ),
-    subtitle: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: _mealTypeColor(meal.mealType).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: Text(
-                meal.mealType.label,
-                style: TextStyle(
-                  color: _mealTypeColor(meal.mealType),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Text('${_one(meal.servings)} × ${meal.servingLabel}'),
-            if (meal.recipeId == null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE9EEF7),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: const Text(
-                  '临时',
-                  style: TextStyle(
-                    color: Color(0xFF53657C),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) => InkWell(
+    onTap: onEdit,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 6, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RecipeThumbnail(bytes: recipe?.imageBytes, size: 54),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  meal.recipeName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: inkColor,
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '碳水 ${_one(meal.total.carbsG)}g · 蛋白 ${_one(meal.total.proteinG)}g · 脂肪 ${_one(meal.total.fatG)}g',
-          style: const TextStyle(fontSize: 11, color: Color(0xFF65726C)),
-        ),
-      ],
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 3,
+                  children: [
+                    Text(
+                      '${_kcal(meal.total.energyKcal)} kcal',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: deepGreen,
+                      ),
+                    ),
+                    Text(
+                      '${_one(meal.servings)} × ${meal.servingLabel}',
+                      style: const TextStyle(fontSize: 11, color: mutedColor),
+                    ),
+                    if (meal.recipeId == null)
+                      const Text(
+                        '临时餐食',
+                        style: TextStyle(fontSize: 11, color: warmColor),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 3,
+                  children: [
+                    Text(
+                      '碳水 ${_one(meal.total.carbsG)}g',
+                      style: const TextStyle(fontSize: 11, color: mutedColor),
+                    ),
+                    Text(
+                      '蛋白 ${_one(meal.total.proteinG)}g',
+                      style: const TextStyle(fontSize: 11, color: mutedColor),
+                    ),
+                    Text(
+                      '脂肪 ${_one(meal.total.fatG)}g',
+                      style: const TextStyle(fontSize: 11, color: mutedColor),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '餐食操作',
+            onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('编辑餐食')),
+              PopupMenuItem(value: 'delete', child: Text('删除')),
+            ],
+          ),
+        ],
+      ),
     ),
-    trailing: PopupMenuButton<String>(
-      onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'edit', child: Text('编辑餐食')),
-        PopupMenuItem(value: 'delete', child: Text('删除')),
-      ],
-    ),
-  );
-}
-
-class _MealFallbackIcon extends StatelessWidget {
-  const _MealFallbackIcon({required this.mealType});
-
-  final MealType mealType;
-
-  @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: _mealTypeColor(mealType).withValues(alpha: 0.14),
-    child: Icon(_mealTypeIcon(mealType), color: _mealTypeColor(mealType)),
   );
 }
 
@@ -1335,13 +1322,14 @@ class _ExerciseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
+    onTap: onEdit,
     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
     leading: const CircleAvatar(
       backgroundColor: Color(0xFFE7F5EE),
       foregroundColor: brandGreen,
       child: Icon(Icons.directions_run_rounded),
     ),
-    title: Text(exercise.name),
+    title: Text(exercise.name, maxLines: 2, overflow: TextOverflow.ellipsis),
     subtitle: const Text('运动消耗'),
     trailing: Row(
       mainAxisSize: MainAxisSize.min,
@@ -1368,11 +1356,13 @@ class MealEditor extends StatefulWidget {
     required this.date,
     required this.recipes,
     this.initial,
+    this.initialRecipe,
   });
 
   final DateTime date;
   final List<Recipe> recipes;
   final MealEntry? initial;
+  final Recipe? initialRecipe;
 
   @override
   State<MealEditor> createState() => _MealEditorState();
@@ -1397,9 +1387,7 @@ class _MealEditorState extends State<MealEditor> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _recipe = initial == null && widget.recipes.isNotEmpty
-        ? widget.recipes.first
-        : null;
+    _recipe = widget.initialRecipe;
     _inputMode = initial == null
         ? (widget.recipes.isEmpty
               ? _MealInputMode.temporary
@@ -1453,7 +1441,7 @@ class _MealEditorState extends State<MealEditor> {
         : editing
         ? widget.initial!.perServing
         : _recipe?.nutrition ?? const Nutrition();
-    final count = double.tryParse(_servings.text) ?? 0;
+    final count = _safeNumber(_servings.text);
     final servingLabel = temporary
         ? _servingLabel.text.trim()
         : editing
@@ -1466,196 +1454,259 @@ class _MealEditorState extends State<MealEditor> {
         20,
         MediaQuery.viewInsetsOf(context).bottom + 20,
       ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _Handle(),
-              Text(
-                editing ? '编辑餐食' : '添加餐食',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 18),
-              if (!editing && widget.recipes.isNotEmpty) ...[
-                SegmentedButton<_MealInputMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: _MealInputMode.recipe,
-                      icon: Icon(Icons.menu_book_outlined),
-                      label: Text('从菜谱选择'),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _Handle(),
+                    EditorHeading(
+                      title: editing ? '编辑餐食' : '添加餐食',
+                      subtitle:
+                          '记录到 ${DateFormat('yyyy年M月d日').format(widget.date)}',
                     ),
-                    ButtonSegment(
-                      value: _MealInputMode.temporary,
-                      icon: Icon(Icons.edit_note_rounded),
-                      label: Text('临时餐食'),
-                    ),
-                  ],
-                  selected: {_inputMode},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (value) =>
-                      setState(() => _inputMode = value.first),
-                ),
-                const SizedBox(height: 14),
-              ],
-              if (!editing && !temporary)
-                DropdownButtonFormField<Recipe>(
-                  initialValue: _recipe,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: '选择菜谱'),
-                  items: widget.recipes
-                      .map(
-                        (recipe) => DropdownMenuItem(
-                          value: recipe,
-                          child: Text(recipe.name),
+                    const SizedBox(height: 18),
+                    if (!editing && widget.recipes.isNotEmpty) ...[
+                      SegmentedButton<_MealInputMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _MealInputMode.recipe,
+                            icon: Icon(Icons.menu_book_outlined),
+                            label: Text('从菜谱选择'),
+                          ),
+                          ButtonSegment(
+                            value: _MealInputMode.temporary,
+                            icon: Icon(Icons.edit_note_rounded),
+                            label: Text('临时餐食'),
+                          ),
+                        ],
+                        selected: {_inputMode},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (value) =>
+                            setState(() => _inputMode = value.first),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (!editing && !temporary)
+                      FormField<Recipe>(
+                        validator: (_) => _recipe == null ? '请先选择一份菜谱' : null,
+                        builder: (field) => InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () async {
+                            final recipe = await showAdaptiveEditor<Recipe>(
+                              context: context,
+                              builder: (_) =>
+                                  RecipePicker(recipes: widget.recipes),
+                            );
+                            if (recipe != null && mounted) {
+                              setState(() => _recipe = recipe);
+                              field.didChange(recipe);
+                            }
+                          },
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: '选择菜谱',
+                              errorText: field.errorText,
+                            ),
+                            child: Row(
+                              children: [
+                                RecipeThumbnail(
+                                  bytes: _recipe?.imageBytes,
+                                  size: 44,
+                                  radius: 10,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _recipe?.name ?? '搜索或按分类选择',
+                                    style: TextStyle(
+                                      color: _recipe == null
+                                          ? mutedColor
+                                          : inkColor,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.search_rounded,
+                                  color: mutedColor,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       )
-                      .toList(),
-                  onChanged: (value) => setState(() => _recipe = value),
-                  validator: (value) => value == null ? '请选择菜谱' : null,
-                )
-              else if (!temporary)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(name),
-                  subtitle: const Text('历史营养快照保持不变'),
-                )
-              else ...[
-                if (!editing && widget.recipes.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4F6F5),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Text('这条记录只计入当天，不会保存到菜谱库。'),
-                  ),
-                if (!editing && widget.recipes.isEmpty)
-                  const SizedBox(height: 12),
-                TextFormField(
-                  controller: _name,
-                  decoration: const InputDecoration(
-                    labelText: '餐食名称',
-                    hintText: '例如：外出聚餐、临时盒饭',
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  validator: _requiredMealText,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _servingLabel,
-                  decoration: const InputDecoration(
-                    labelText: '每份说明',
-                    hintText: '例如：一份、一碗、250 克',
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  validator: _requiredMealText,
-                ),
-                const SizedBox(height: 16),
-                Text('每份营养', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                _temporaryNumberField(
-                  controller: _energy,
-                  label: '能量',
-                  suffix: 'kcal',
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _temporaryNumberField(
-                        controller: _carbs,
-                        label: '碳水',
+                    else if (!temporary)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(name),
+                        subtitle: const Text('历史营养快照保持不变'),
+                      )
+                    else ...[
+                      if (!editing && widget.recipes.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF4F6F5),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Text('这条记录只计入当天，不会保存到菜谱库。'),
+                        ),
+                      if (!editing && widget.recipes.isEmpty)
+                        const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _name,
+                        decoration: const InputDecoration(
+                          labelText: '餐食名称',
+                          hintText: '例如：外出聚餐、临时盒饭',
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        validator: _requiredMealText,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _servingLabel,
+                        decoration: const InputDecoration(
+                          labelText: '每份说明',
+                          hintText: '例如：一份、一碗、250 克',
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        validator: _requiredMealText,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '每份营养',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      _temporaryNumberField(
+                        controller: _energy,
+                        label: '能量',
+                        suffix: 'kcal',
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _temporaryNumberField(
+                              controller: _carbs,
+                              label: '碳水',
+                              suffix: 'g',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _temporaryNumberField(
+                              controller: _protein,
+                              label: '蛋白质',
+                              suffix: 'g',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _temporaryNumberField(
+                        controller: _fat,
+                        label: '脂肪',
                         suffix: 'g',
                       ),
+                    ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<MealType>(
+                      initialValue: _mealType,
+                      decoration: const InputDecoration(labelText: '餐次'),
+                      items: MealType.values
+                          .map(
+                            (type) => DropdownMenuItem(
+                              value: type,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _mealTypeIcon(type),
+                                    size: 18,
+                                    color: _mealTypeColor(type),
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Text(type.label),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _mealType = value!),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _temporaryNumberField(
-                        controller: _protein,
-                        label: '蛋白质',
-                        suffix: 'g',
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _servings,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: '本次份数',
+                        suffixText: servingLabel,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      validator: (value) {
+                        final number = double.tryParse(value ?? '');
+                        if (number == null || !number.isFinite || number <= 0) {
+                          return '请输入大于 0 的份数';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final amount in [0.5, 1.0, 1.5, 2.0])
+                          ChoiceChip(
+                            label: Text('${_one(amount)} 份'),
+                            selected: count == amount,
+                            onSelected: (_) =>
+                                setState(() => _servings.text = _one(amount)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF5F0),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '本次约 ${_kcal(perServing.energyKcal * count)} kcal · 碳水 ${_one(perServing.carbsG * count)}g · 蛋白 ${_one(perServing.proteinG * count)}g · 脂肪 ${_one(perServing.fatG * count)}g',
                       ),
                     ),
+                    const SizedBox(height: 10),
                   ],
                 ),
-                const SizedBox(height: 12),
-                _temporaryNumberField(
-                  controller: _fat,
-                  label: '脂肪',
-                  suffix: 'g',
-                ),
-              ],
-              const SizedBox(height: 12),
-              DropdownButtonFormField<MealType>(
-                initialValue: _mealType,
-                decoration: const InputDecoration(labelText: '餐次'),
-                items: MealType.values
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Row(
-                          children: [
-                            Icon(
-                              _mealTypeIcon(type),
-                              size: 18,
-                              color: _mealTypeColor(type),
-                            ),
-                            const SizedBox(width: 9),
-                            Text(type.label),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _mealType = value!),
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _servings,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: '本次份数',
-                  suffixText: servingLabel,
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (value) {
-                  final number = double.tryParse(value ?? '');
-                  if (number == null || number <= 0) return '请输入大于 0 的份数';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF5F0),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  '本次约 ${_kcal(perServing.energyKcal * count)} kcal · 碳水 ${_one(perServing.carbsG * count)}g · 蛋白 ${_one(perServing.proteinG * count)}g · 脂肪 ${_one(perServing.fatG * count)}g',
-                ),
-              ),
-              const SizedBox(height: 22),
-              FilledButton(
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
                 onPressed: _submit,
                 child: Text(editing ? '保存修改' : '添加到当天'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Nutrition get _temporaryNutrition => Nutrition(
-    energyKcal: double.tryParse(_energy.text.trim()) ?? 0,
-    carbsG: double.tryParse(_carbs.text.trim()) ?? 0,
-    proteinG: double.tryParse(_protein.text.trim()) ?? 0,
-    fatG: double.tryParse(_fat.text.trim()) ?? 0,
+    energyKcal: _safeNumber(_energy.text),
+    carbsG: _safeNumber(_carbs.text),
+    proteinG: _safeNumber(_protein.text),
+    fatG: _safeNumber(_fat.text),
   );
 
   Widget _temporaryNumberField({
@@ -1669,7 +1720,7 @@ class _MealEditorState extends State<MealEditor> {
     onChanged: (_) => setState(() {}),
     validator: (value) {
       final parsed = double.tryParse(value?.trim() ?? '');
-      if (parsed == null) return '请输入有效数字';
+      if (parsed == null || !parsed.isFinite) return '请输入有效数字';
       if (parsed < 0) return '不能小于 0';
       return null;
     },
@@ -1830,7 +1881,9 @@ class _ExerciseEditorState extends State<ExerciseEditor> {
               ),
               validator: (value) {
                 final number = double.tryParse(value ?? '');
-                if (number == null || number <= 0) return '请输入大于 0 的能量';
+                if (number == null || !number.isFinite || number <= 0) {
+                  return '请输入大于 0 的能量';
+                }
                 return null;
               },
             ),
@@ -1876,7 +1929,14 @@ class _Handle extends StatelessWidget {
         );
 }
 
-String _kcal(double value) => value.round().toString();
-String _one(double value) => value == value.roundToDouble()
+double _safeNumber(String text) {
+  final value = double.tryParse(text.trim());
+  return value != null && value.isFinite && value >= 0 ? value : 0;
+}
+
+String _kcal(double value) => value.isFinite ? value.round().toString() : '—';
+String _one(double value) => !value.isFinite
+    ? '—'
+    : value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(1);

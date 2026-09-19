@@ -88,6 +88,7 @@ class AppState {
 }
 
 class AppController extends AsyncNotifier<AppState> {
+  int _dateSelectionVersion = 0;
   AppDatabase get _database => ref.read(databaseProvider);
 
   @override
@@ -129,6 +130,7 @@ class AppController extends AsyncNotifier<AppState> {
   }
 
   Future<void> selectDate(DateTime date) async {
+    final version = ++_dateSelectionVersion;
     final current = state.requireValue;
     final selected = dayOnly(date);
     final day = await _database.ensureDay(
@@ -138,8 +140,9 @@ class AppController extends AsyncNotifier<AppState> {
     );
     final meals = await _database.loadMeals(selected);
     final exercises = await _database.loadExercises(selected);
+    if (version != _dateSelectionVersion) return;
     state = AsyncData(
-      current.copyWith(
+      state.requireValue.copyWith(
         selectedDate: selected,
         day: day,
         meals: meals,
@@ -157,7 +160,9 @@ class AppController extends AsyncNotifier<AppState> {
       target: current.goals[type]!.target,
     );
     await _database.saveDay(day);
-    state = AsyncData(current.copyWith(day: day));
+    if (dateKey(state.requireValue.selectedDate) == dateKey(day.date)) {
+      state = AsyncData(state.requireValue.copyWith(day: day));
+    }
     await _refreshTrends();
   }
 
@@ -202,7 +207,27 @@ class AppController extends AsyncNotifier<AppState> {
     await _database.saveGoal(goal);
     final current = state.requireValue;
     final goals = {...current.goals, goal.type: goal};
-    state = AsyncData(current.copyWith(goals: goals));
+    final today = dayOnly(DateTime.now());
+    final todayRecord = await _database.getDay(today);
+    DayRecord? updatedToday;
+    if (todayRecord != null && todayRecord.type == goal.type) {
+      updatedToday = DayRecord(
+        date: today,
+        type: goal.type,
+        baselineKcal: todayRecord.baselineKcal,
+        target: goal.target,
+      );
+      await _database.saveDay(updatedToday);
+    }
+    state = AsyncData(
+      state.requireValue.copyWith(
+        goals: goals,
+        day: dateKey(state.requireValue.selectedDate) == dateKey(today)
+            ? updatedToday
+            : null,
+      ),
+    );
+    await _refreshTrends();
   }
 
   Future<void> saveRecipe(Recipe recipe) async {
